@@ -1339,6 +1339,7 @@ function App() {
                     keys={keys}
                     snippets={snippets}
                     isVisible={isVisible}
+                    inWorkspace={inActiveWorkspace}
                     fontSize={14}
                     terminalTheme={currentTerminalTheme}
                     sessionId={session.id}

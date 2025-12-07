@@ -13,6 +13,7 @@ interface TerminalProps {
   keys: SSHKey[];
   snippets: Snippet[];
   isVisible: boolean;
+  inWorkspace?: boolean;
   fontSize: number;
   terminalTheme: TerminalTheme;
   sessionId: string;
@@ -34,6 +35,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   keys,
   snippets,
   isVisible,
+  inWorkspace,
   fontSize,
   terminalTheme,
   sessionId,
@@ -363,13 +365,30 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     startSSH(termRef.current);
   };
 
-  return (
-    <div className="relative h-full w-full flex overflow-hidden bg-gradient-to-br from-[#050910] via-[#06101a] to-[#0b1220] border-l border-border/70">
-      <div className="absolute top-4 right-6 z-10 flex gap-2">
+  const renderControls = (variant: 'default' | 'compact') => {
+    const isCompact = variant === 'compact';
+    const buttonBase = isCompact
+      ? "h-7 px-2 text-[11px] bg-white/5 hover:bg-white/10 text-white shadow-none border-none"
+      : "h-8 px-3 text-xs backdrop-blur-md border border-white/10 shadow-lg";
+    const scriptsButtonBase = isCompact
+      ? "h-7 px-2 text-[11px] bg-white/5 hover:bg-white/10 text-white shadow-none border-none"
+      : "h-8 px-3 text-xs bg-muted/20 hover:bg-muted/80 backdrop-blur-md border border-white/10 text-white shadow-lg";
+    const statusBase = isCompact
+      ? "px-2 h-7 rounded-md text-[10px] flex items-center gap-1.5 font-semibold shadow-sm"
+      : "px-3 h-8 rounded-md border border-white/10 text-[11px] flex items-center gap-2 shadow";
+    const statusTone =
+      status === 'connected'
+        ? "bg-emerald-500/20 text-emerald-100"
+        : status === 'connecting'
+          ? "bg-amber-500/20 text-amber-100"
+          : "bg-muted/40 text-muted-foreground";
+
+    return (
+      <>
         <Button
           variant="secondary"
           size="sm"
-          className="h-8 px-3 text-xs backdrop-blur-md border border-white/10 shadow-lg"
+          className={buttonBase}
           disabled={status !== 'connected'}
           title={status === 'connected' ? "Open SFTP" : "Available after connect"}
           onClick={() => setShowSFTP((v) => !v)}
@@ -382,12 +401,12 @@ const TerminalComponent: React.FC<TerminalProps> = ({
             <Button
               variant="secondary"
               size="sm"
-              className="h-8 px-3 text-xs bg-muted/20 hover:bg-muted/80 backdrop-blur-md border border-white/10 text-white shadow-lg"
+              className={scriptsButtonBase}
             >
               <Zap size={12} className="mr-2" /> Scripts
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-64 p-0" align="end">
+          <PopoverContent className="w-64 p-0" align={isCompact ? "start" : "end"}>
             <div className="px-3 py-2 text-[10px] uppercase text-muted-foreground font-semibold bg-muted/30 border-b">
               Library
             </div>
@@ -416,23 +435,43 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           </PopoverContent>
         </Popover>
 
-        <div
-          className={cn(
-            "px-3 h-8 rounded-md border border-white/10 text-[11px] flex items-center gap-2 shadow",
-            status === 'connected'
-              ? "bg-emerald-500/20 text-emerald-100"
-              : status === 'connecting'
-                ? "bg-amber-500/20 text-amber-100"
-                : "bg-muted/40 text-muted-foreground"
-          )}
-        >
+        <div className={cn(statusBase, statusTone)}>
           <Activity size={12} />
           <span className="capitalize">{status}</span>
         </div>
-      </div>
+      </>
+    );
+  };
+
+  return (
+    <div className="relative h-full w-full flex overflow-hidden bg-gradient-to-br from-[#050910] via-[#06101a] to-[#0b1220] border-l border-border/70">
+      {!inWorkspace && (
+        <div className="absolute top-4 right-6 z-10 flex gap-2">
+          {renderControls('default')}
+        </div>
+      )}
+
+      {inWorkspace && (
+        <div className="absolute left-0 right-0 top-0 z-20 pointer-events-none">
+          <div className="flex items-center gap-2 px-2 py-1 bg-black/55 text-white backdrop-blur-md pointer-events-auto">
+            <div className="flex-1 min-w-0 flex items-center gap-2 text-[11px] font-semibold truncate">
+              <span className="truncate">{host.label}</span>
+              <span className="text-white/80 font-mono text-[10px] font-normal truncate">
+                {host.username}@{host.hostname}:{host.port || 22}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {renderControls('compact')}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div
-        className="h-full flex-1 p-2 min-w-0 transition-all duration-300 relative"
+        className={cn(
+          "h-full flex-1 min-w-0 transition-all duration-300 relative",
+          inWorkspace ? "pt-9 px-2 pb-2" : "p-2"
+        )}
         style={{ backgroundColor: terminalTheme.colors.background }}
       >
         <div ref={containerRef} className="h-full w-full" />
