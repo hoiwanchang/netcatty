@@ -101,6 +101,7 @@ export interface TerminalSession {
   username: string;
   hostname: string;
   status: 'connecting' | 'connected' | 'disconnected';
+  workspaceId?: string;
 }
 
 export interface RemoteFile {
@@ -108,4 +109,24 @@ export interface RemoteFile {
   type: 'file' | 'directory';
   size: string;
   lastModified: string;
+}
+
+export type WorkspaceNode =
+  | {
+      id: string;
+      type: 'pane';
+      sessionId: string;
+    }
+  | {
+      id: string;
+      type: 'split';
+      direction: 'horizontal' | 'vertical';
+      children: WorkspaceNode[];
+      sizes?: number[]; // relative sizes for children
+    };
+
+export interface Workspace {
+  id: string;
+  title: string;
+  root: WorkspaceNode;
 }
