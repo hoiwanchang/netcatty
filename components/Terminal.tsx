@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, memo } from 'react';
 import { Ghostty, Terminal as GhosttyTerminal, FitAddon } from 'ghostty-web';
 import { Host, SSHKey, Snippet, TerminalSession, TerminalTheme } from '../types';
 import { Zap, FolderInput, Loader2, AlertCircle, ShieldCheck, Clock, Play, X } from 'lucide-react';
@@ -17,10 +17,10 @@ interface TerminalProps {
   fontSize: number;
   terminalTheme: TerminalTheme;
   sessionId: string;
-  onStatusChange?: (status: TerminalSession['status']) => void;
+  onStatusChange?: (sessionId: string, status: TerminalSession['status']) => void;
   onSessionExit?: (sessionId: string) => void;
   onOsDetected?: (hostId: string, distro: string) => void;
-  onCloseSession?: () => void;
+  onCloseSession?: (sessionId: string) => void;
 }
 
 let ghosttyPromise: Promise<Ghostty> | null = null;
@@ -67,7 +67,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   const updateStatus = (next: TerminalSession['status']) => {
     setStatus(next);
     hasConnectedRef.current = next === 'connected';
-    onStatusChange?.(next);
+    onStatusChange?.(sessionId, next);
   };
 
   const cleanupSession = () => {
@@ -537,7 +537,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
             className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10"
             onClick={(e) => {
               e.stopPropagation();
-              onCloseSession?.();
+              onCloseSession?.(sessionId);
             }}
             title="Close session"
           >
@@ -731,4 +731,8 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   );
 };
 
-export default TerminalComponent;
+// Memoized Terminal - only re-renders when props change
+const Terminal = memo(TerminalComponent);
+Terminal.displayName = 'Terminal';
+
+export default Terminal;

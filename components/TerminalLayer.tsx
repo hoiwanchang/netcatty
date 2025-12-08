@@ -63,8 +63,26 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   const isVaultActive = activeTabId === 'vault';
   const isSftpActive = activeTabId === 'sftp';
   const isVisible = (!isVaultActive && !isSftpActive) || !!draggingSessionId;
-  
+
   console.log('[TerminalLayer] render, isVisible:', isVisible, 'activeTabId:', activeTabId);
+  
+  // Stable callback references for Terminal components
+  const handleCloseSession = useCallback((sessionId: string) => {
+    onCloseSession(sessionId);
+  }, [onCloseSession]);
+
+  const handleStatusChange = useCallback((sessionId: string, status: TerminalSession['status']) => {
+    onUpdateSessionStatus(sessionId, status);
+  }, [onUpdateSessionStatus]);
+
+  const handleSessionExit = useCallback((sessionId: string) => {
+    onUpdateSessionStatus(sessionId, 'disconnected');
+  }, [onUpdateSessionStatus]);
+
+  const handleOsDetected = useCallback((hostId: string, distro: string) => {
+    onUpdateHostDistro(hostId, distro);
+  }, [onUpdateHostDistro]);
+
   const [workspaceArea, setWorkspaceArea] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const workspaceOuterRef = useRef<HTMLDivElement>(null);
   const workspaceInnerRef = useRef<HTMLDivElement>(null);
@@ -388,10 +406,10 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
                 fontSize={14}
                 terminalTheme={terminalTheme}
                 sessionId={session.id}
-                onCloseSession={() => onCloseSession(session.id)}
-                onStatusChange={(next) => onUpdateSessionStatus(session.id, next)}
-                onSessionExit={() => onUpdateSessionStatus(session.id, 'disconnected')}
-                onOsDetected={(hid, distro) => onUpdateHostDistro(hid, distro)}
+                onCloseSession={handleCloseSession}
+                onStatusChange={handleStatusChange}
+                onSessionExit={handleSessionExit}
+                onOsDetected={handleOsDetected}
               />
             </div>
           );

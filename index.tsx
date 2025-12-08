@@ -11,6 +11,6 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   // StrictMode causes double renders in development - disabled for performance testing
   // <React.StrictMode>
-    <App />
+  <App />
   // </React.StrictMode>
 );

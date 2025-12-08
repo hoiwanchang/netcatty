@@ -292,525 +292,183 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
     onDragStart,
     onDragEnd,
 }) => {
-        const [showHostPicker, setShowHostPicker] = useState(false);
-        const [hostSearch, setHostSearch] = useState('');
-        const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
-        const [newFolderName, setNewFolderName] = useState('');
-        const [showRenameDialog, setShowRenameDialog] = useState(false);
-        const [renameTarget, setRenameTarget] = useState<string | null>(null);
-        const [renameName, setRenameName] = useState('');
-        const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-        const [deleteTargets, setDeleteTargets] = useState<string[]>([]);
-        const [dragOverEntry, setDragOverEntry] = useState<string | null>(null);
-        const [isDragOverPane, setIsDragOverPane] = useState(false);
-        const fileListRef = useRef<HTMLDivElement>(null);
+    const [showHostPicker, setShowHostPicker] = useState(false);
+    const [hostSearch, setHostSearch] = useState('');
+    const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
+    const [newFolderName, setNewFolderName] = useState('');
+    const [showRenameDialog, setShowRenameDialog] = useState(false);
+    const [renameTarget, setRenameTarget] = useState<string | null>(null);
+    const [renameName, setRenameName] = useState('');
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleteTargets, setDeleteTargets] = useState<string[]>([]);
+    const [dragOverEntry, setDragOverEntry] = useState<string | null>(null);
+    const [isDragOverPane, setIsDragOverPane] = useState(false);
+    const fileListRef = useRef<HTMLDivElement>(null);
 
-        const filteredHosts = useMemo(() => {
-            const term = hostSearch.trim().toLowerCase();
-            return hosts.filter(h =>
-                !term ||
-                h.label.toLowerCase().includes(term) ||
-                h.hostname.toLowerCase().includes(term)
-            ).sort((a, b) => a.label.localeCompare(b.label));
-        }, [hosts, hostSearch]);
+    const filteredHosts = useMemo(() => {
+        const term = hostSearch.trim().toLowerCase();
+        return hosts.filter(h =>
+            !term ||
+            h.label.toLowerCase().includes(term) ||
+            h.hostname.toLowerCase().includes(term)
+        ).sort((a, b) => a.label.localeCompare(b.label));
+    }, [hosts, hostSearch]);
 
-        // Add parent entry if not at root
-        const displayFiles = useMemo(() => {
-            if (!pane.connection) return [];
-            if (pane.connection.currentPath === '/') return filteredFiles;
-            const parentEntry: SftpFileEntry = {
-                name: '..',
-                type: 'directory',
-                size: 0,
-                sizeFormatted: '--',
-                lastModified: 0,
-                lastModifiedFormatted: '--',
-            };
-            return [parentEntry, ...filteredFiles.filter(f => f.name !== '..')];
-        }, [pane.connection, filteredFiles]);
-
-        const handleCreateFolder = async () => {
-            if (!newFolderName.trim()) return;
-            try {
-                await onCreateDirectory(newFolderName.trim());
-                setShowNewFolderDialog(false);
-                setNewFolderName('');
-            } catch (err) {
-                // Error handling
-            }
+    // Add parent entry if not at root
+    const displayFiles = useMemo(() => {
+        if (!pane.connection) return [];
+        if (pane.connection.currentPath === '/') return filteredFiles;
+        const parentEntry: SftpFileEntry = {
+            name: '..',
+            type: 'directory',
+            size: 0,
+            sizeFormatted: '--',
+            lastModified: 0,
+            lastModifiedFormatted: '--',
         };
+        return [parentEntry, ...filteredFiles.filter(f => f.name !== '..')];
+    }, [pane.connection, filteredFiles]);
 
-        const handleRename = async () => {
-            if (!renameTarget || !renameName.trim()) return;
-            try {
-                await onRenameFile(renameTarget, renameName.trim());
-                setShowRenameDialog(false);
-                setRenameTarget(null);
-                setRenameName('');
-            } catch (err) {
-                // Error handling
-            }
-        };
+    const handleCreateFolder = async () => {
+        if (!newFolderName.trim()) return;
+        try {
+            await onCreateDirectory(newFolderName.trim());
+            setShowNewFolderDialog(false);
+            setNewFolderName('');
+        } catch (err) {
+            // Error handling
+        }
+    };
 
-        const handleDelete = async () => {
-            if (deleteTargets.length === 0) return;
-            try {
-                await onDeleteFiles(deleteTargets);
-                setShowDeleteConfirm(false);
-                setDeleteTargets([]);
-                onClearSelection();
-            } catch (err) {
-                // Error handling
-            }
-        };
+    const handleRename = async () => {
+        if (!renameTarget || !renameName.trim()) return;
+        try {
+            await onRenameFile(renameTarget, renameName.trim());
+            setShowRenameDialog(false);
+            setRenameTarget(null);
+            setRenameName('');
+        } catch (err) {
+            // Error handling
+        }
+    };
 
-        const handlePaneDragOver = (e: React.DragEvent) => {
-            if (!draggedFiles || draggedFiles[0]?.side === side) return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'copy';
-            setIsDragOverPane(true);
-        };
+    const handleDelete = async () => {
+        if (deleteTargets.length === 0) return;
+        try {
+            await onDeleteFiles(deleteTargets);
+            setShowDeleteConfirm(false);
+            setDeleteTargets([]);
+            onClearSelection();
+        } catch (err) {
+            // Error handling
+        }
+    };
 
-        const handlePaneDragLeave = (e: React.DragEvent) => {
-            if (!fileListRef.current?.contains(e.relatedTarget as Node)) {
-                setIsDragOverPane(false);
-            }
-        };
+    const handlePaneDragOver = (e: React.DragEvent) => {
+        if (!draggedFiles || draggedFiles[0]?.side === side) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        setIsDragOverPane(true);
+    };
 
-        const handlePaneDrop = (e: React.DragEvent) => {
-            e.preventDefault();
+    const handlePaneDragLeave = (e: React.DragEvent) => {
+        if (!fileListRef.current?.contains(e.relatedTarget as Node)) {
             setIsDragOverPane(false);
-            setDragOverEntry(null);
+        }
+    };
 
-            if (!draggedFiles || draggedFiles[0]?.side === side) return;
-            onStartTransfer(draggedFiles.map(f => ({ name: f.name, isDirectory: f.isDirectory })));
-        };
+    const handlePaneDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragOverPane(false);
+        setDragOverEntry(null);
 
-        const handleFileDragStart = (entry: SftpFileEntry, e: React.DragEvent) => {
-            if (entry.name === '..') {
-                e.preventDefault();
-                return;
-            }
+        if (!draggedFiles || draggedFiles[0]?.side === side) return;
+        onStartTransfer(draggedFiles.map(f => ({ name: f.name, isDirectory: f.isDirectory })));
+    };
 
-            const selectedNames = Array.from(pane.selectedFiles);
-            const files = selectedNames.includes(entry.name)
-                ? displayFiles.filter(f => selectedNames.includes(f.name)).map(f => ({
-                    name: f.name,
-                    isDirectory: f.type === 'directory',
-                    side,
-                }))
-                : [{ name: entry.name, isDirectory: entry.type === 'directory', side }];
-
-            e.dataTransfer.effectAllowed = 'copy';
-            e.dataTransfer.setData('text/plain', files.map(f => f.name).join('\n'));
-            onDragStart(files, side);
-        };
-
-        const handleEntryDragOver = (entry: SftpFileEntry, e: React.DragEvent) => {
-            if (!draggedFiles || draggedFiles[0]?.side === side) return;
-            if (entry.type !== 'directory' || entry.name === '..') return;
-
+    const handleFileDragStart = (entry: SftpFileEntry, e: React.DragEvent) => {
+        if (entry.name === '..') {
             e.preventDefault();
-            e.stopPropagation();
-            setDragOverEntry(entry.name);
-        };
-
-        const handleEntryDrop = (entry: SftpFileEntry, e: React.DragEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setDragOverEntry(null);
-            setIsDragOverPane(false);
-
-            if (!draggedFiles || draggedFiles[0]?.side === side) return;
-            if (entry.type !== 'directory') return;
-
-            // Navigate to directory first, then transfer
-            // For now, just transfer to current directory
-            onStartTransfer(draggedFiles.map(f => ({ name: f.name, isDirectory: f.isDirectory })));
-        };
-
-        const openRenameDialog = (name: string) => {
-            setRenameTarget(name);
-            setRenameName(name);
-            setShowRenameDialog(true);
-        };
-
-        const openDeleteConfirm = (names: string[]) => {
-            setDeleteTargets(names);
-            setShowDeleteConfirm(true);
-        };
-
-        if (!pane.connection) {
-            return (
-                <div className="absolute inset-0 flex flex-col">
-                    <div className="h-12 px-4 border-b border-border/60 flex items-center gap-3 shrink-0">
-                        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                            {side === 'left' ? <Monitor size={14} /> : <HardDrive size={14} />}
-                            <span>{side === 'left' ? 'Local' : 'Remote'}</span>
-                        </div>
-                        <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => setShowHostPicker(true)}>
-                            <Plus size={14} className="mr-2" /> Select host
-                        </Button>
-                    </div>
-
-                    <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 p-6">
-                        <div className="h-14 w-14 rounded-xl bg-secondary/60 text-primary flex items-center justify-center">
-                            {side === 'left' ? <Monitor size={24} /> : <HardDrive size={24} />}
-                        </div>
-                        <div>
-                            <div className="text-sm font-semibold mb-1">Select a host to start</div>
-                            <div className="text-xs text-muted-foreground">
-                                Choose a local or remote filesystem to browse
-                            </div>
-                        </div>
-                        <Button onClick={() => setShowHostPicker(true)}>
-                            <Plus size={14} className="mr-2" /> Select host
-                        </Button>
-                    </div>
-
-                    {/* Host picker dialog */}
-                    <Dialog open={showHostPicker} onOpenChange={setShowHostPicker}>
-                        <DialogContent className="max-w-md">
-                            <DialogHeader>
-                                <DialogTitle>Select Host</DialogTitle>
-                                <DialogDescription>
-                                    Pick a host for the {side} pane
-                                </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-3">
-                                <Input
-                                    value={hostSearch}
-                                    onChange={e => setHostSearch(e.target.value)}
-                                    placeholder="Search hosts..."
-                                    className="h-9"
-                                />
-
-                                {/* Local option */}
-                                <div
-                                    className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border/70 bg-secondary/30 cursor-pointer hover:border-primary/50 hover:bg-secondary/50 transition-colors"
-                                    onClick={() => { onConnect('local'); setShowHostPicker(false); }}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-9 w-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
-                                            <Monitor size={16} />
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-medium">Local filesystem</div>
-                                            <div className="text-xs text-muted-foreground">Browse local files</div>
-                                        </div>
-                                    </div>
-                                    <Badge variant="outline" className="text-[10px]">Local</Badge>
-                                </div>
-
-                                {/* Remote hosts */}
-                                <div className="max-h-64 overflow-auto space-y-2">
-                                    {filteredHosts.map(host => (
-                                        <div
-                                            key={host.id}
-                                            className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border/70 bg-secondary/30 cursor-pointer hover:border-primary/50 hover:bg-secondary/50 transition-colors"
-                                            onClick={() => { onConnect(host); setShowHostPicker(false); }}
-                                        >
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <DistroAvatar host={host} fallback={host.label[0].toUpperCase()} className="h-9 w-9" />
-                                                <div className="min-w-0">
-                                                    <div className="text-sm font-medium truncate">{host.label}</div>
-                                                    <div className="text-xs text-muted-foreground truncate">
-                                                        {host.username}@{host.hostname}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-primary/30">
-                                                SSH
-                                            </Badge>
-                                        </div>
-                                    ))}
-                                    {filteredHosts.length === 0 && (
-                                        <div className="text-xs text-muted-foreground text-center py-6 border border-dashed border-border/60 rounded-lg">
-                                            No matching hosts
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </DialogContent>
-                    </Dialog>
-                </div>
-            );
+            return;
         }
 
+        const selectedNames = Array.from(pane.selectedFiles);
+        const files = selectedNames.includes(entry.name)
+            ? displayFiles.filter(f => selectedNames.includes(f.name)).map(f => ({
+                name: f.name,
+                isDirectory: f.type === 'directory',
+                side,
+            }))
+            : [{ name: entry.name, isDirectory: entry.type === 'directory', side }];
+
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('text/plain', files.map(f => f.name).join('\n'));
+        onDragStart(files, side);
+    };
+
+    const handleEntryDragOver = (entry: SftpFileEntry, e: React.DragEvent) => {
+        if (!draggedFiles || draggedFiles[0]?.side === side) return;
+        if (entry.type !== 'directory' || entry.name === '..') return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOverEntry(entry.name);
+    };
+
+    const handleEntryDrop = (entry: SftpFileEntry, e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOverEntry(null);
+        setIsDragOverPane(false);
+
+        if (!draggedFiles || draggedFiles[0]?.side === side) return;
+        if (entry.type !== 'directory') return;
+
+        // Navigate to directory first, then transfer
+        // For now, just transfer to current directory
+        onStartTransfer(draggedFiles.map(f => ({ name: f.name, isDirectory: f.isDirectory })));
+    };
+
+    const openRenameDialog = (name: string) => {
+        setRenameTarget(name);
+        setRenameName(name);
+        setShowRenameDialog(true);
+    };
+
+    const openDeleteConfirm = (names: string[]) => {
+        setDeleteTargets(names);
+        setShowDeleteConfirm(true);
+    };
+
+    if (!pane.connection) {
         return (
-            <div
-                className={cn(
-                    "absolute inset-0 flex flex-col transition-colors",
-                    isDragOverPane && "bg-primary/5"
-                )}
-                onDragOver={handlePaneDragOver}
-                onDragLeave={handlePaneDragLeave}
-                onDrop={handlePaneDrop}
-            >
-                {/* Header */}
-                <div className="h-12 px-4 border-b border-border/60 flex items-center gap-3">
-                    <div className="flex items-center gap-2 text-sm font-semibold">
-                        {pane.connection.isLocal ? <Monitor size={14} /> : <HardDrive size={14} />}
-                        <span>{pane.connection.hostLabel}</span>
-                        {pane.connection.status === 'connecting' && (
-                            <Loader2 size={12} className="animate-spin text-muted-foreground" />
-                        )}
-                        {pane.connection.status === 'error' && (
-                            <AlertCircle size={12} className="text-destructive" />
-                        )}
+            <div className="absolute inset-0 flex flex-col">
+                <div className="h-12 px-4 border-b border-border/60 flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                        {side === 'left' ? <Monitor size={14} /> : <HardDrive size={14} />}
+                        <span>{side === 'left' ? 'Local' : 'Remote'}</span>
                     </div>
-
                     <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => setShowHostPicker(true)}>
-                        <RefreshCw size={12} className="mr-1" /> Change
+                        <Plus size={14} className="mr-2" /> Select host
                     </Button>
-
-                    <div className="flex items-center gap-1 ml-auto">
-                        <div className="relative">
-                            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                                value={pane.filter}
-                                onChange={e => onSetFilter(e.target.value)}
-                                placeholder="Filter..."
-                                className="h-8 w-36 pl-8 pr-7 text-xs bg-secondary/40"
-                            />
-                            {pane.filter && (
-                                <button
-                                    onClick={() => onSetFilter('')}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                >
-                                    <X size={12} />
-                                </button>
-                            )}
-                        </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onRefresh} title="Refresh">
-                            <RefreshCw size={14} className={pane.loading ? 'animate-spin' : ''} />
-                        </Button>
-                    </div>
                 </div>
 
-                {/* Toolbar */}
-                <div className="h-10 px-4 flex items-center gap-2 border-b border-border/40 bg-secondary/20">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNavigateUp} title="Go up">
-                        <ChevronLeft size={14} />
+                <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 p-6">
+                    <div className="h-14 w-14 rounded-xl bg-secondary/60 text-primary flex items-center justify-center">
+                        {side === 'left' ? <Monitor size={24} /> : <HardDrive size={24} />}
+                    </div>
+                    <div>
+                        <div className="text-sm font-semibold mb-1">Select a host to start</div>
+                        <div className="text-xs text-muted-foreground">
+                            Choose a local or remote filesystem to browse
+                        </div>
+                    </div>
+                    <Button onClick={() => setShowHostPicker(true)}>
+                        <Plus size={14} className="mr-2" /> Select host
                     </Button>
-                    <Breadcrumb
-                        path={pane.connection.currentPath}
-                        onNavigate={onNavigateTo}
-                        onHome={() => pane.connection?.homeDir && onNavigateTo(pane.connection.homeDir)}
-                    />
-                    <div className="ml-auto flex items-center gap-1">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            onClick={() => setShowNewFolderDialog(true)}
-                        >
-                            <FolderPlus size={12} className="mr-1" /> New Folder
-                        </Button>
-                    </div>
                 </div>
 
-                {/* File list header */}
-                <div className="grid grid-cols-[minmax(0,1fr)_140px_80px_60px] text-[11px] uppercase tracking-wide text-muted-foreground px-4 py-2 border-b border-border/40 bg-secondary/10">
-                    <span>Name</span>
-                    <span>Modified</span>
-                    <span className="text-right">Size</span>
-                    <span className="text-right">Kind</span>
-                </div>
-
-                {/* File list */}
-                <div
-                    ref={fileListRef}
-                    className={cn(
-                        "flex-1 min-h-0 overflow-y-auto relative",
-                        isDragOverPane && "ring-2 ring-primary/30 ring-inset"
-                    )}
-                >
-                    {pane.loading && displayFiles.length === 0 ? (
-                        <div className="flex items-center justify-center h-full">
-                            <Loader2 size={24} className="animate-spin text-muted-foreground" />
-                        </div>
-                    ) : pane.error ? (
-                        <div className="flex flex-col items-center justify-center h-full gap-2 text-destructive">
-                            <AlertCircle size={24} />
-                            <span className="text-sm">{pane.error}</span>
-                            <Button variant="outline" size="sm" onClick={onRefresh}>
-                                Retry
-                            </Button>
-                        </div>
-                    ) : displayFiles.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                            <Folder size={32} className="mb-2 opacity-50" />
-                            <span className="text-sm">Empty directory</span>
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-border/30">
-                            {displayFiles.map((entry, idx) => (
-                                <ContextMenu key={`${entry.name}-${idx}`}>
-                                    <ContextMenuTrigger>
-                                        <FileRow
-                                            entry={entry}
-                                            isSelected={pane.selectedFiles.has(entry.name)}
-                                            isDragOver={dragOverEntry === entry.name}
-                                            onSelect={(e) => {
-                                                if (entry.name === '..') return;
-                                                onToggleSelection(entry.name, e.ctrlKey || e.metaKey);
-                                            }}
-                                            onOpen={() => onOpenEntry(entry)}
-                                            onDragStart={(e) => handleFileDragStart(entry, e)}
-                                            onDragEnd={onDragEnd}
-                                            onDragOver={(e) => handleEntryDragOver(entry, e)}
-                                            onDragLeave={() => setDragOverEntry(null)}
-                                            onDrop={(e) => handleEntryDrop(entry, e)}
-                                        />
-                                    </ContextMenuTrigger>
-                                    {entry.name !== '..' && (
-                                        <ContextMenuContent>
-                                            <ContextMenuItem onClick={() => onOpenEntry(entry)}>
-                                                {entry.type === 'directory' ? 'Open' : 'Download'}
-                                            </ContextMenuItem>
-                                            <ContextMenuSeparator />
-                                            <ContextMenuItem onClick={() => {
-                                                const files = pane.selectedFiles.has(entry.name)
-                                                    ? Array.from(pane.selectedFiles)
-                                                    : [entry.name];
-                                                const fileData = files.map(name => {
-                                                    const file = displayFiles.find(f => f.name === name);
-                                                    return { name, isDirectory: file?.type === 'directory' || false };
-                                                });
-                                                onStartTransfer(fileData);
-                                            }}>
-                                                <Copy size={14} className="mr-2" /> Copy to other pane
-                                            </ContextMenuItem>
-                                            <ContextMenuSeparator />
-                                            <ContextMenuItem onClick={() => openRenameDialog(entry.name)}>
-                                                <Pencil size={14} className="mr-2" /> Rename
-                                            </ContextMenuItem>
-                                            {onEditPermissions && pane.connection && !pane.connection.isLocal && (
-                                                <ContextMenuItem onClick={() => onEditPermissions(entry)}>
-                                                    <Shield size={14} className="mr-2" /> Permissions
-                                                </ContextMenuItem>
-                                            )}
-                                            <ContextMenuItem
-                                                className="text-destructive"
-                                                onClick={() => {
-                                                    const files = pane.selectedFiles.has(entry.name)
-                                                        ? Array.from(pane.selectedFiles)
-                                                        : [entry.name];
-                                                    openDeleteConfirm(files);
-                                                }}
-                                            >
-                                                <Trash2 size={14} className="mr-2" /> Delete
-                                            </ContextMenuItem>
-                                            <ContextMenuSeparator />
-                                            <ContextMenuItem onClick={onRefresh}>
-                                                <RefreshCw size={14} className="mr-2" /> Refresh
-                                            </ContextMenuItem>
-                                            <ContextMenuItem onClick={() => setShowNewFolderDialog(true)}>
-                                                <FolderPlus size={14} className="mr-2" /> New Folder
-                                            </ContextMenuItem>
-                                        </ContextMenuContent>
-                                    )}
-                                </ContextMenu>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Drop overlay */}
-                    {isDragOverPane && draggedFiles && draggedFiles[0]?.side !== side && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-primary/5 pointer-events-none">
-                            <div className="flex flex-col items-center gap-2 text-primary">
-                                <ArrowDown size={32} />
-                                <span className="text-sm font-medium">Drop files here</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Footer - pinned at bottom */}
-                <div className="h-9 shrink-0 px-4 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40 bg-secondary/30">
-                    <span>
-                        {displayFiles.filter(f => f.name !== '..').length} items
-                        {pane.selectedFiles.size > 0 && ` • ${pane.selectedFiles.size} selected`}
-                    </span>
-                    <span className="truncate max-w-[200px]">{pane.connection.currentPath}</span>
-                </div>
-
-                {/* New folder dialog */}
-                <Dialog open={showNewFolderDialog} onOpenChange={setShowNewFolderDialog}>
-                    <DialogContent className="max-w-sm">
-                        <DialogHeader>
-                            <DialogTitle>New Folder</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <Label>Folder name</Label>
-                                <Input
-                                    value={newFolderName}
-                                    onChange={e => setNewFolderName(e.target.value)}
-                                    placeholder="Enter folder name"
-                                    onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
-                                    autoFocus
-                                />
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setShowNewFolderDialog(false)}>Cancel</Button>
-                            <Button onClick={handleCreateFolder} disabled={!newFolderName.trim()}>Create</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-
-                {/* Rename dialog */}
-                <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
-                    <DialogContent className="max-w-sm">
-                        <DialogHeader>
-                            <DialogTitle>Rename</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <Label>New name</Label>
-                                <Input
-                                    value={renameName}
-                                    onChange={e => setRenameName(e.target.value)}
-                                    placeholder="Enter new name"
-                                    onKeyDown={e => e.key === 'Enter' && handleRename()}
-                                    autoFocus
-                                />
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setShowRenameDialog(false)}>Cancel</Button>
-                            <Button onClick={handleRename} disabled={!renameName.trim()}>Rename</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-
-                {/* Delete confirmation */}
-                <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-                    <DialogContent className="max-w-sm">
-                        <DialogHeader>
-                            <DialogTitle>Delete {deleteTargets.length} item{deleteTargets.length > 1 ? 's' : ''}?</DialogTitle>
-                            <DialogDescription>
-                                This action cannot be undone. The following will be deleted:
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="max-h-32 overflow-auto text-sm space-y-1">
-                            {deleteTargets.map(name => (
-                                <div key={name} className="flex items-center gap-2 text-muted-foreground">
-                                    <Trash2 size={12} />
-                                    <span className="truncate">{name}</span>
-                                </div>
-                            ))}
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
-                            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-
-                {/* Host picker */}
+                {/* Host picker dialog */}
                 <Dialog open={showHostPicker} onOpenChange={setShowHostPicker}>
                     <DialogContent className="max-w-md">
                         <DialogHeader>
@@ -827,9 +485,10 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
                                 className="h-9"
                             />
 
+                            {/* Local option */}
                             <div
                                 className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border/70 bg-secondary/30 cursor-pointer hover:border-primary/50 hover:bg-secondary/50 transition-colors"
-                                onClick={() => { onDisconnect(); onConnect('local'); setShowHostPicker(false); }}
+                                onClick={() => { onConnect('local'); setShowHostPicker(false); }}
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="h-9 w-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
@@ -843,12 +502,13 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
                                 <Badge variant="outline" className="text-[10px]">Local</Badge>
                             </div>
 
+                            {/* Remote hosts */}
                             <div className="max-h-64 overflow-auto space-y-2">
                                 {filteredHosts.map(host => (
                                     <div
                                         key={host.id}
                                         className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border/70 bg-secondary/30 cursor-pointer hover:border-primary/50 hover:bg-secondary/50 transition-colors"
-                                        onClick={() => { onDisconnect(); onConnect(host); setShowHostPicker(false); }}
+                                        onClick={() => { onConnect(host); setShowHostPicker(false); }}
                                     >
                                         <div className="flex items-center gap-3 min-w-0">
                                             <DistroAvatar host={host} fallback={host.label[0].toUpperCase()} className="h-9 w-9" />
@@ -864,13 +524,353 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
                                         </Badge>
                                     </div>
                                 ))}
+                                {filteredHosts.length === 0 && (
+                                    <div className="text-xs text-muted-foreground text-center py-6 border border-dashed border-border/60 rounded-lg">
+                                        No matching hosts
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </DialogContent>
                 </Dialog>
             </div>
         );
-    };
+    }
+
+    return (
+        <div
+            className={cn(
+                "absolute inset-0 flex flex-col transition-colors",
+                isDragOverPane && "bg-primary/5"
+            )}
+            onDragOver={handlePaneDragOver}
+            onDragLeave={handlePaneDragLeave}
+            onDrop={handlePaneDrop}
+        >
+            {/* Header */}
+            <div className="h-12 px-4 border-b border-border/60 flex items-center gap-3">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                    {pane.connection.isLocal ? <Monitor size={14} /> : <HardDrive size={14} />}
+                    <span>{pane.connection.hostLabel}</span>
+                    {pane.connection.status === 'connecting' && (
+                        <Loader2 size={12} className="animate-spin text-muted-foreground" />
+                    )}
+                    {pane.connection.status === 'error' && (
+                        <AlertCircle size={12} className="text-destructive" />
+                    )}
+                </div>
+
+                <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => setShowHostPicker(true)}>
+                    <RefreshCw size={12} className="mr-1" /> Change
+                </Button>
+
+                <div className="flex items-center gap-1 ml-auto">
+                    <div className="relative">
+                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            value={pane.filter}
+                            onChange={e => onSetFilter(e.target.value)}
+                            placeholder="Filter..."
+                            className="h-8 w-36 pl-8 pr-7 text-xs bg-secondary/40"
+                        />
+                        {pane.filter && (
+                            <button
+                                onClick={() => onSetFilter('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                                <X size={12} />
+                            </button>
+                        )}
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onRefresh} title="Refresh">
+                        <RefreshCw size={14} className={pane.loading ? 'animate-spin' : ''} />
+                    </Button>
+                </div>
+            </div>
+
+            {/* Toolbar */}
+            <div className="h-10 px-4 flex items-center gap-2 border-b border-border/40 bg-secondary/20">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNavigateUp} title="Go up">
+                    <ChevronLeft size={14} />
+                </Button>
+                <Breadcrumb
+                    path={pane.connection.currentPath}
+                    onNavigate={onNavigateTo}
+                    onHome={() => pane.connection?.homeDir && onNavigateTo(pane.connection.homeDir)}
+                />
+                <div className="ml-auto flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setShowNewFolderDialog(true)}
+                    >
+                        <FolderPlus size={12} className="mr-1" /> New Folder
+                    </Button>
+                </div>
+            </div>
+
+            {/* File list header */}
+            <div className="grid grid-cols-[minmax(0,1fr)_140px_80px_60px] text-[11px] uppercase tracking-wide text-muted-foreground px-4 py-2 border-b border-border/40 bg-secondary/10">
+                <span>Name</span>
+                <span>Modified</span>
+                <span className="text-right">Size</span>
+                <span className="text-right">Kind</span>
+            </div>
+
+            {/* File list */}
+            <div
+                ref={fileListRef}
+                className={cn(
+                    "flex-1 min-h-0 overflow-y-auto relative",
+                    isDragOverPane && "ring-2 ring-primary/30 ring-inset"
+                )}
+            >
+                {pane.loading && displayFiles.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                        <Loader2 size={24} className="animate-spin text-muted-foreground" />
+                    </div>
+                ) : pane.error ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2 text-destructive">
+                        <AlertCircle size={24} />
+                        <span className="text-sm">{pane.error}</span>
+                        <Button variant="outline" size="sm" onClick={onRefresh}>
+                            Retry
+                        </Button>
+                    </div>
+                ) : displayFiles.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                        <Folder size={32} className="mb-2 opacity-50" />
+                        <span className="text-sm">Empty directory</span>
+                    </div>
+                ) : (
+                    <div className="divide-y divide-border/30">
+                        {displayFiles.map((entry, idx) => (
+                            <ContextMenu key={`${entry.name}-${idx}`}>
+                                <ContextMenuTrigger>
+                                    <FileRow
+                                        entry={entry}
+                                        isSelected={pane.selectedFiles.has(entry.name)}
+                                        isDragOver={dragOverEntry === entry.name}
+                                        onSelect={(e) => {
+                                            if (entry.name === '..') return;
+                                            onToggleSelection(entry.name, e.ctrlKey || e.metaKey);
+                                        }}
+                                        onOpen={() => onOpenEntry(entry)}
+                                        onDragStart={(e) => handleFileDragStart(entry, e)}
+                                        onDragEnd={onDragEnd}
+                                        onDragOver={(e) => handleEntryDragOver(entry, e)}
+                                        onDragLeave={() => setDragOverEntry(null)}
+                                        onDrop={(e) => handleEntryDrop(entry, e)}
+                                    />
+                                </ContextMenuTrigger>
+                                {entry.name !== '..' && (
+                                    <ContextMenuContent>
+                                        <ContextMenuItem onClick={() => onOpenEntry(entry)}>
+                                            {entry.type === 'directory' ? 'Open' : 'Download'}
+                                        </ContextMenuItem>
+                                        <ContextMenuSeparator />
+                                        <ContextMenuItem onClick={() => {
+                                            const files = pane.selectedFiles.has(entry.name)
+                                                ? Array.from(pane.selectedFiles)
+                                                : [entry.name];
+                                            const fileData = files.map(name => {
+                                                const file = displayFiles.find(f => f.name === name);
+                                                return { name, isDirectory: file?.type === 'directory' || false };
+                                            });
+                                            onStartTransfer(fileData);
+                                        }}>
+                                            <Copy size={14} className="mr-2" /> Copy to other pane
+                                        </ContextMenuItem>
+                                        <ContextMenuSeparator />
+                                        <ContextMenuItem onClick={() => openRenameDialog(entry.name)}>
+                                            <Pencil size={14} className="mr-2" /> Rename
+                                        </ContextMenuItem>
+                                        {onEditPermissions && pane.connection && !pane.connection.isLocal && (
+                                            <ContextMenuItem onClick={() => onEditPermissions(entry)}>
+                                                <Shield size={14} className="mr-2" /> Permissions
+                                            </ContextMenuItem>
+                                        )}
+                                        <ContextMenuItem
+                                            className="text-destructive"
+                                            onClick={() => {
+                                                const files = pane.selectedFiles.has(entry.name)
+                                                    ? Array.from(pane.selectedFiles)
+                                                    : [entry.name];
+                                                openDeleteConfirm(files);
+                                            }}
+                                        >
+                                            <Trash2 size={14} className="mr-2" /> Delete
+                                        </ContextMenuItem>
+                                        <ContextMenuSeparator />
+                                        <ContextMenuItem onClick={onRefresh}>
+                                            <RefreshCw size={14} className="mr-2" /> Refresh
+                                        </ContextMenuItem>
+                                        <ContextMenuItem onClick={() => setShowNewFolderDialog(true)}>
+                                            <FolderPlus size={14} className="mr-2" /> New Folder
+                                        </ContextMenuItem>
+                                    </ContextMenuContent>
+                                )}
+                            </ContextMenu>
+                        ))}
+                    </div>
+                )}
+
+                {/* Drop overlay */}
+                {isDragOverPane && draggedFiles && draggedFiles[0]?.side !== side && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-primary/5 pointer-events-none">
+                        <div className="flex flex-col items-center gap-2 text-primary">
+                            <ArrowDown size={32} />
+                            <span className="text-sm font-medium">Drop files here</span>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Footer - pinned at bottom */}
+            <div className="h-9 shrink-0 px-4 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40 bg-secondary/30">
+                <span>
+                    {displayFiles.filter(f => f.name !== '..').length} items
+                    {pane.selectedFiles.size > 0 && ` • ${pane.selectedFiles.size} selected`}
+                </span>
+                <span className="truncate max-w-[200px]">{pane.connection.currentPath}</span>
+            </div>
+
+            {/* New folder dialog */}
+            <Dialog open={showNewFolderDialog} onOpenChange={setShowNewFolderDialog}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>New Folder</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Folder name</Label>
+                            <Input
+                                value={newFolderName}
+                                onChange={e => setNewFolderName(e.target.value)}
+                                placeholder="Enter folder name"
+                                onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowNewFolderDialog(false)}>Cancel</Button>
+                        <Button onClick={handleCreateFolder} disabled={!newFolderName.trim()}>Create</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Rename dialog */}
+            <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Rename</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>New name</Label>
+                            <Input
+                                value={renameName}
+                                onChange={e => setRenameName(e.target.value)}
+                                placeholder="Enter new name"
+                                onKeyDown={e => e.key === 'Enter' && handleRename()}
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowRenameDialog(false)}>Cancel</Button>
+                        <Button onClick={handleRename} disabled={!renameName.trim()}>Rename</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete confirmation */}
+            <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Delete {deleteTargets.length} item{deleteTargets.length > 1 ? 's' : ''}?</DialogTitle>
+                        <DialogDescription>
+                            This action cannot be undone. The following will be deleted:
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="max-h-32 overflow-auto text-sm space-y-1">
+                        {deleteTargets.map(name => (
+                            <div key={name} className="flex items-center gap-2 text-muted-foreground">
+                                <Trash2 size={12} />
+                                <span className="truncate">{name}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+                        <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Host picker */}
+            <Dialog open={showHostPicker} onOpenChange={setShowHostPicker}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Select Host</DialogTitle>
+                        <DialogDescription>
+                            Pick a host for the {side} pane
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                        <Input
+                            value={hostSearch}
+                            onChange={e => setHostSearch(e.target.value)}
+                            placeholder="Search hosts..."
+                            className="h-9"
+                        />
+
+                        <div
+                            className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border/70 bg-secondary/30 cursor-pointer hover:border-primary/50 hover:bg-secondary/50 transition-colors"
+                            onClick={() => { onDisconnect(); onConnect('local'); setShowHostPicker(false); }}
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
+                                    <Monitor size={16} />
+                                </div>
+                                <div>
+                                    <div className="text-sm font-medium">Local filesystem</div>
+                                    <div className="text-xs text-muted-foreground">Browse local files</div>
+                                </div>
+                            </div>
+                            <Badge variant="outline" className="text-[10px]">Local</Badge>
+                        </div>
+
+                        <div className="max-h-64 overflow-auto space-y-2">
+                            {filteredHosts.map(host => (
+                                <div
+                                    key={host.id}
+                                    className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border/70 bg-secondary/30 cursor-pointer hover:border-primary/50 hover:bg-secondary/50 transition-colors"
+                                    onClick={() => { onDisconnect(); onConnect(host); setShowHostPicker(false); }}
+                                >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <DistroAvatar host={host} fallback={host.label[0].toUpperCase()} className="h-9 w-9" />
+                                        <div className="min-w-0">
+                                            <div className="text-sm font-medium truncate">{host.label}</div>
+                                            <div className="text-xs text-muted-foreground truncate">
+                                                {host.username}@{host.hostname}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-primary/30">
+                                        SSH
+                                    </Badge>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+};
 
 // Memoized SftpPaneView - only re-renders when pane data or callbacks change
 const SftpPaneView = memo(SftpPaneViewInner);

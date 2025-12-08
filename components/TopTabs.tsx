@@ -118,7 +118,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
   const isVaultActive = activeTabId === 'vault';
   const isSftpActive = activeTabId === 'sftp';
   const onSelectTab = activeTabStore.setActiveTabId;
-  
+
   console.log('[TopTabs] render, activeTabId:', activeTabId);
   // Tab reorder drag state
   const [dropIndicator, setDropIndicator] = useState<{ tabId: string; position: 'before' | 'after' } | null>(null);
