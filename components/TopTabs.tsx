@@ -151,7 +151,7 @@ export const TopTabs: React.FC<TopTabsProps> = ({
   const handleTabDragOver = (e: React.DragEvent, tabId: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    
+
     if (!draggedTabIdRef.current || draggedTabIdRef.current === tabId) {
       return;
     }
@@ -160,7 +160,7 @@ export const TopTabs: React.FC<TopTabsProps> = ({
     const rect = e.currentTarget.getBoundingClientRect();
     const midpoint = rect.left + rect.width / 2;
     const position: 'before' | 'after' = e.clientX < midpoint ? 'before' : 'after';
-    
+
     setDropIndicator({ tabId, position });
   };
 
@@ -175,11 +175,11 @@ export const TopTabs: React.FC<TopTabsProps> = ({
   const handleTabDrop = (e: React.DragEvent, targetTabId: string) => {
     e.preventDefault();
     const draggedId = e.dataTransfer.getData('tab-reorder-id') || draggedTabIdRef.current;
-    
+
     if (draggedId && draggedId !== targetTabId && dropIndicator) {
       onReorderTabs(draggedId, targetTabId, dropIndicator.position);
     }
-    
+
     setDropIndicator(null);
     setIsDraggingForReorder(false);
   };
@@ -189,19 +189,19 @@ export const TopTabs: React.FC<TopTabsProps> = ({
     if (!dropIndicator || !isDraggingForReorder || !draggedTabIdRef.current) {
       return {};
     }
-    
+
     const draggedIndex = orderedTabs.indexOf(draggedTabIdRef.current);
     const currentIndex = orderedTabs.indexOf(tabId);
     const targetIndex = orderedTabs.indexOf(dropIndicator.tabId);
-    
+
     // Don't shift the dragged tab itself
     if (tabId === draggedTabIdRef.current) {
       return {};
     }
-    
+
     // Calculate the effective drop position
     const dropIndex = dropIndicator.position === 'before' ? targetIndex : targetIndex + 1;
-    
+
     // Determine if this tab needs to shift
     if (draggedIndex < dropIndex) {
       // Dragging forward: tabs between dragged and drop position shift left
@@ -214,7 +214,7 @@ export const TopTabs: React.FC<TopTabsProps> = ({
         return { transform: 'translateX(8px)' };
       }
     }
-    
+
     return {};
   };
 
@@ -229,7 +229,7 @@ export const TopTabs: React.FC<TopTabsProps> = ({
         const shiftStyle = getTabShiftStyle(session.id);
         const showDropIndicatorBefore = dropIndicator?.tabId === session.id && dropIndicator.position === 'before';
         const showDropIndicatorAfter = dropIndicator?.tabId === session.id && dropIndicator.position === 'after';
-        
+
         return (
           <div
             key={session.id}
