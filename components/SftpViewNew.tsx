@@ -183,7 +183,7 @@ const TransferItem: React.FC<{
     onDismiss: () => void;
 }> = ({ task, onCancel, onRetry, onDismiss }) => {
     const progress = task.totalBytes > 0 ? Math.min((task.transferredBytes / task.totalBytes) * 100, 100) : 0;
-    
+
     // Format speed with appropriate unit
     const formatSpeed = (bytesPerSecond: number): string => {
         if (bytesPerSecond <= 0) return '';
@@ -203,7 +203,7 @@ const TransferItem: React.FC<{
         : remainingTime > 0
             ? `~${remainingTime}s left`
             : '';
-    
+
     // Format bytes transferred / total
     const bytesDisplay = task.status === 'transferring' && task.totalBytes > 0
         ? `${formatTransferBytes(task.transferredBytes)} / ${formatTransferBytes(task.totalBytes)}`
@@ -237,18 +237,18 @@ const TransferItem: React.FC<{
                             <div
                                 className={cn(
                                     "h-full rounded-full relative overflow-hidden",
-                                    task.status === 'pending' 
+                                    task.status === 'pending'
                                         ? "bg-muted-foreground/50 animate-pulse"
                                         : "bg-gradient-to-r from-primary via-primary/90 to-primary"
                                 )}
-                                style={{ 
+                                style={{
                                     width: task.status === 'pending' ? '100%' : `${progress}%`,
                                     transition: 'width 150ms ease-out'
                                 }}
                             >
                                 {/* Animated shine effect */}
                                 {task.status === 'transferring' && (
-                                    <div 
+                                    <div
                                         className="absolute inset-0 w-1/2 h-full"
                                         style={{
                                             background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
