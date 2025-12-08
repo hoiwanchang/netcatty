@@ -41,6 +41,35 @@ const sessions = new Map();
 const sftpClients = new Map();
 const keyRoot = path.join(os.homedir(), ".nebula-ssh", "keys");
 
+// On Windows, node-pty with conpty needs full paths to executables
+const findExecutable = (name) => {
+  if (process.platform !== "win32") return name;
+  
+  const { execSync } = require("child_process");
+  try {
+    const result = execSync(`where.exe ${name}`, { encoding: "utf8" });
+    const firstLine = result.split(/\r?\n/)[0].trim();
+    if (firstLine && fs.existsSync(firstLine)) {
+      return firstLine;
+    }
+  } catch (err) {
+    console.warn(`Could not find ${name} via where.exe:`, err.message);
+  }
+  
+  // Fallback to common locations
+  const commonPaths = [
+    path.join(process.env.SystemRoot || "C:\\Windows", "System32", "OpenSSH", `${name}.exe`),
+    path.join(process.env.ProgramFiles || "C:\\Program Files", "Git", "usr", "bin", `${name}.exe`),
+    path.join(process.env.ProgramFiles || "C:\\Program Files", "OpenSSH", `${name}.exe`),
+  ];
+  
+  for (const p of commonPaths) {
+    if (fs.existsSync(p)) return p;
+  }
+  
+  return name; // Fall back to bare name
+};
+
 const ensureKeyDir = () => {
   try {
     fs.mkdirSync(keyRoot, { recursive: true, mode: 0o700 });
@@ -68,80 +97,124 @@ const registerSSHBridge = (win) => {
   if (registerSSHBridge._registered) return;
   registerSSHBridge._registered = true;
 
+  // Pure ssh2-based SSH session (no external ssh.exe required)
   const start = (event, options) => {
-    const sessionId =
-      options.sessionId ||
-      `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return new Promise((resolve, reject) => {
+      const sessionId =
+        options.sessionId ||
+        `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    const sshArgs = [];
-    if (options.port) sshArgs.push("-p", String(options.port));
-    sshArgs.push("-o", "StrictHostKeyChecking=accept-new");
-    sshArgs.push(
-      "-o",
-      `UserKnownHostsFile=${path.join(os.homedir(), ".ssh", "known_hosts")}`
-    );
-    if (options.agentForwarding) sshArgs.push("-A");
+      const conn = new SSHClient();
+      const cols = options.cols || 80;
+      const rows = options.rows || 24;
 
-    const keyPath = options.privateKey
-      ? writeKeyToDisk(options.keyId || sessionId, options.privateKey)
-      : null;
-    if (keyPath) {
-      sshArgs.push("-i", keyPath);
-    }
-    if (Array.isArray(options.extraArgs)) {
-      sshArgs.push(...options.extraArgs);
-    }
-    sshArgs.push(`${options.username}@${options.hostname}`);
+      const connectOpts = {
+        host: options.hostname,
+        port: options.port || 22,
+        username: options.username || "root",
+        readyTimeout: 30000,
+        keepaliveInterval: 10000,
+      };
 
-    const env = {
-      ...process.env,
-      LANG: options.charset || process.env.LANG || "en_US.UTF-8",
-      TERM: "xterm-256color",
-    };
-
-    const proc = pty.spawn("ssh", sshArgs, {
-      cols: options.cols || 80,
-      rows: options.rows || 24,
-      env,
-    });
-
-    const session = {
-      proc,
-      webContentsId: event.sender.id,
-      password: options.password,
-      sentPassword: false,
-    };
-
-  sessions.set(sessionId, session);
-
-    proc.onData((data) => {
-      if (session.password && !session.sentPassword && /password:/i.test(data)) {
-        proc.write(`${session.password}\r`);
-        session.sentPassword = true;
+      // Authentication: private key takes precedence
+      if (options.privateKey) {
+        connectOpts.privateKey = options.privateKey;
+        if (options.passphrase) {
+          connectOpts.passphrase = options.passphrase;
+        }
+      } else if (options.password) {
+        connectOpts.password = options.password;
       }
-      const contents = BrowserWindow.fromWebContents(event.sender)?.webContents;
-      contents?.send("nebula:data", { sessionId, data });
-    });
 
-    proc.onExit((evt) => {
-      const contents = BrowserWindow.fromWebContents(event.sender)?.webContents;
-      contents?.send("nebula:exit", { sessionId, ...evt });
-      sessions.delete(sessionId);
-    });
+      // Agent forwarding
+      if (options.agentForwarding) {
+        connectOpts.agentForward = true;
+        if (process.platform === "win32") {
+          connectOpts.agent = "\\\\.\\pipe\\openssh-ssh-agent";
+        } else {
+          connectOpts.agent = process.env.SSH_AUTH_SOCK;
+        }
+      }
 
-    return { sessionId };
+      conn.on("ready", () => {
+        conn.shell(
+          {
+            term: "xterm-256color",
+            cols,
+            rows,
+            env: { LANG: options.charset || "en_US.UTF-8" },
+          },
+          (err, stream) => {
+            if (err) {
+              conn.end();
+              reject(err);
+              return;
+            }
+
+            const session = {
+              conn,
+              stream,
+              webContentsId: event.sender.id,
+            };
+            sessions.set(sessionId, session);
+
+            stream.on("data", (data) => {
+              const contents = BrowserWindow.fromWebContents(event.sender)?.webContents;
+              contents?.send("nebula:data", { sessionId, data: data.toString("utf8") });
+            });
+
+            stream.stderr?.on("data", (data) => {
+              const contents = BrowserWindow.fromWebContents(event.sender)?.webContents;
+              contents?.send("nebula:data", { sessionId, data: data.toString("utf8") });
+            });
+
+            stream.on("close", () => {
+              const contents = BrowserWindow.fromWebContents(event.sender)?.webContents;
+              contents?.send("nebula:exit", { sessionId, exitCode: 0 });
+              sessions.delete(sessionId);
+              conn.end();
+            });
+
+            // Run startup command if specified
+            if (options.startupCommand) {
+              setTimeout(() => {
+                stream.write(`${options.startupCommand}\n`);
+              }, 300);
+            }
+
+            resolve({ sessionId });
+          }
+        );
+      });
+
+      conn.on("error", (err) => {
+        console.error("SSH connection error:", err.message);
+        const contents = BrowserWindow.fromWebContents(event.sender)?.webContents;
+        contents?.send("nebula:exit", { sessionId, exitCode: 1, error: err.message });
+        sessions.delete(sessionId);
+        reject(err);
+      });
+
+      conn.on("close", () => {
+        const contents = BrowserWindow.fromWebContents(event.sender)?.webContents;
+        contents?.send("nebula:exit", { sessionId, exitCode: 0 });
+        sessions.delete(sessionId);
+      });
+
+      conn.connect(connectOpts);
+    });
   };
 
   const write = (_event, payload) => {
     const session = sessions.get(payload.sessionId);
-    session?.proc.write(payload.data);
+    session?.stream?.write(payload.data);
   };
 
   const resize = (_event, payload) => {
     const session = sessions.get(payload.sessionId);
-    if (!session) return;
+    if (!session?.stream) return;
     try {
-      session.proc.resize(payload.cols, payload.rows);
+      session.stream.setWindow(payload.rows, payload.cols, 0, 0);
     } catch (err) {
       console.warn("Resize failed", err);
     }
@@ -151,9 +224,10 @@ const registerSSHBridge = (win) => {
     const session = sessions.get(payload.sessionId);
     if (!session) return;
     try {
-      session.proc.kill();
+      session.stream?.close();
+      session.conn?.end();
     } catch (err) {
-      console.warn("Kill failed", err);
+      console.warn("Close failed", err);
     }
     sessions.delete(payload.sessionId);
   };
@@ -163,10 +237,10 @@ const registerSSHBridge = (win) => {
     const sessionId =
       payload?.sessionId ||
       `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const shell =
-      payload?.shell ||
-      process.env.SHELL ||
-      (process.platform === "win32" ? "powershell.exe" : "/bin/bash");
+    const defaultShell = process.platform === "win32" 
+      ? findExecutable("powershell") || "powershell.exe"
+      : process.env.SHELL || "/bin/bash";
+    const shell = payload?.shell || defaultShell;
     const env = {
       ...process.env,
       ...(payload?.env || {}),
