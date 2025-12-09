@@ -1,4 +1,5 @@
 import React, { useMemo, useState, memo } from 'react';
+import { AppLogo } from './AppLogo';
 import {
   Activity,
   BookMarked,
@@ -209,7 +210,7 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
       {/* Sidebar */}
       <div className="w-64 bg-secondary/80 border-r border-border/60 flex flex-col">
         <div className="px-4 py-4 flex items-center gap-3">
-          <img src="/logo.svg" alt="netcatty logo" className="h-10 w-10 rounded-xl bg-transparent" />
+          <AppLogo className="h-10 w-10 rounded-xl" />
           <div>
             <p className="text-sm font-bold text-foreground">Netcatty</p>
           </div>

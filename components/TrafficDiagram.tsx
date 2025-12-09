@@ -1,5 +1,6 @@
 import React from 'react';
 import { PortForwardingType } from '../domain/models';
+import { AppLogo } from './AppLogo';
 
 // SVG Icon components from public folder
 const CloudIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -22,25 +23,7 @@ interface TrafficDiagramProps {
     highlightRole?: 'app' | 'ssh-server' | 'target';
 }
 
-// App Logo component - using logo.svg design
-const AppLogo: React.FC<{ className?: string }> = ({ className }) => (
-    <div className={className}>
-        <svg viewBox="0 0 64 64" className="w-full h-full">
-            <rect x="4" y="4" width="56" height="56" rx="12" fill="#2463EB" />
-            <rect x="14" y="17" width="36" height="24" rx="4" fill="white" />
-            <rect x="14" y="17" width="36" height="5" rx="4" fill="#E5ECFF" />
-            <circle cx="18" cy="19.5" r="1" fill="#2463EB" />
-            <circle cx="22" cy="19.5" r="1" fill="#2463EB" opacity="0.7" />
-            <circle cx="26" cy="19.5" r="1" fill="#2463EB" opacity="0.5" />
-            <path d="M20 32 L24 30 L20 28" stroke="#2463EB" fill="none" strokeWidth="1.6" />
-            <path d="M28 34 H34" stroke="#2463EB" strokeWidth="1.6" />
-            <path d="M24 17 L26 12 L28 17Z" fill="white" />
-            <path d="M36 17 L38 12 L40 17Z" fill="white" />
-            <path d="M40 37 C44 40,46 42,46 46 C46 49,44 51,41 51" stroke="white" fill="none" strokeWidth="3.2" />
-            <rect x="38" y="48" width="6" height="5" rx="1" fill="white" stroke="#2463EB" />
-        </svg>
-    </div>
-);
+// AppLogo is now imported from ./AppLogo to share accent color theming
 
 // Animated line component
 const AnimatedLine: React.FC<{
