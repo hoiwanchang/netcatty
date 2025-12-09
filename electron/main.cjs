@@ -406,6 +406,71 @@ const registerSSHBridge = (win) => {
     return true;
   };
 
+  // Write binary data with progress callback
+  const writeSftpBinaryWithProgress = async (event, payload) => {
+    const client = sftpClients.get(payload.sftpId);
+    if (!client) throw new Error("SFTP session not found");
+    
+    const { sftpId, path: remotePath, content, transferId } = payload;
+    const buffer = Buffer.from(content);
+    const totalBytes = buffer.length;
+    let transferredBytes = 0;
+    let lastProgressTime = Date.now();
+    let lastTransferredBytes = 0;
+    
+    // Create a readable stream from the buffer
+    const { Readable } = require("stream");
+    const readableStream = new Readable({
+      read() {
+        // Push data in chunks of 64KB for progress updates
+        const chunkSize = 65536;
+        if (transferredBytes < totalBytes) {
+          const end = Math.min(transferredBytes + chunkSize, totalBytes);
+          const chunk = buffer.slice(transferredBytes, end);
+          transferredBytes = end;
+          
+          // Calculate speed
+          const now = Date.now();
+          const elapsed = (now - lastProgressTime) / 1000;
+          let speed = 0;
+          if (elapsed >= 0.1) {
+            speed = (transferredBytes - lastTransferredBytes) / elapsed;
+            lastProgressTime = now;
+            lastTransferredBytes = transferredBytes;
+          }
+          
+          // Send progress update
+          const contents = electronModule.webContents.fromId(event.sender.id);
+          contents?.send("nebula:upload:progress", {
+            transferId,
+            transferred: transferredBytes,
+            totalBytes,
+            speed,
+          });
+          
+          this.push(chunk);
+        } else {
+          this.push(null); // End of stream
+        }
+      }
+    });
+    
+    try {
+      await client.put(readableStream, remotePath);
+      
+      // Send completion
+      const contents = electronModule.webContents.fromId(event.sender.id);
+      contents?.send("nebula:upload:complete", { transferId });
+      
+      return { success: true, transferId };
+    } catch (err) {
+      // Send error
+      const contents = electronModule.webContents.fromId(event.sender.id);
+      contents?.send("nebula:upload:error", { transferId, error: err.message });
+      throw err;
+    }
+  };
+
   const closeSftp = async (_event, payload) => {
     const client = sftpClients.get(payload.sftpId);
     if (!client) return;
@@ -541,6 +606,7 @@ const registerSSHBridge = (win) => {
   electronModule.ipcMain.handle("nebula:sftp:list", listSftp);
   electronModule.ipcMain.handle("nebula:sftp:read", readSftp);
   electronModule.ipcMain.handle("nebula:sftp:write", writeSftp);
+  electronModule.ipcMain.handle("nebula:sftp:writeBinaryWithProgress", writeSftpBinaryWithProgress);
   electronModule.ipcMain.handle("nebula:sftp:close", closeSftp);
   electronModule.ipcMain.handle("nebula:sftp:mkdir", mkdirSftp);
   electronModule.ipcMain.handle("nebula:sftp:delete", deleteSftp);

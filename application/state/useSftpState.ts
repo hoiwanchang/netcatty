@@ -619,6 +619,33 @@ export const useSftpState = (hosts: Host[], keys: SSHKey[]) => {
     });
   }, []);
 
+  // Range selection for shift-click
+  const rangeSelect = useCallback((side: 'left' | 'right', startIdx: number, endIdx: number) => {
+    const pane = side === 'left' ? leftPane : rightPane;
+    const setPane = side === 'left' ? setLeftPane : setRightPane;
+    
+    // Get the filtered files list (same as what's displayed)
+    const displayFiles = pane.files.filter(f => {
+      if (!pane.filter) return true;
+      return f.name.toLowerCase().includes(pane.filter.toLowerCase());
+    });
+    
+    // Add parent entry logic - need to account for ".." entry if not at root
+    const hasParent = pane.connection?.currentPath !== '/';
+    const adjustedStart = hasParent ? startIdx - 1 : startIdx;
+    const adjustedEnd = hasParent ? endIdx - 1 : endIdx;
+    
+    const newSelection = new Set<string>();
+    for (let i = Math.max(0, adjustedStart); i <= Math.min(displayFiles.length - 1, adjustedEnd); i++) {
+      const file = displayFiles[i];
+      if (file && file.name !== '..') {
+        newSelection.add(file.name);
+      }
+    }
+    
+    setPane(prev => ({ ...prev, selectedFiles: newSelection }));
+  }, [leftPane, rightPane]);
+
   const clearSelection = useCallback((side: 'left' | 'right') => {
     const setPane = side === 'left' ? setLeftPane : setRightPane;
     setPane(prev => ({ ...prev, selectedFiles: new Set() }));
@@ -1264,6 +1291,7 @@ export const useSftpState = (hosts: Host[], keys: SSHKey[]) => {
     
     // Selection
     toggleSelection,
+    rangeSelect,
     clearSelection,
     selectAll,
     setFilter,

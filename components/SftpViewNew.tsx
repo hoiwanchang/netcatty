@@ -10,6 +10,30 @@ import { DistroAvatar } from './DistroAvatar';
 import { useSftpState, SftpPane } from '../application/state/useSftpState';
 import { useIsSftpActive } from '../application/state/activeTabStore';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from './ui/context-menu';
+
+// Format bytes with appropriate unit (B, KB, MB, GB)
+const formatBytes = (bytes: number | string): string => {
+    const numBytes = typeof bytes === 'string' ? parseInt(bytes, 10) : bytes;
+    if (isNaN(numBytes) || numBytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(numBytes) / Math.log(1024));
+    const size = numBytes / Math.pow(1024, i);
+    return `${size.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+};
+
+// Format date as YYYY-MM-DD HH:mm:ss in local timezone
+const formatDate = (timestamp: number | undefined): string => {
+    if (!timestamp) return '--';
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return '--';
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+
+// Sort configuration types
+type SortField = 'name' | 'size' | 'modified' | 'type';
+type SortOrder = 'asc' | 'desc';
+
 import {
     FileCode,
     Folder,
@@ -35,35 +59,112 @@ import {
     Home,
     Search,
     Shield,
+    FileText,
+    FileImage,
+    FileVideo,
+    FileAudio,
+    FileArchive,
+    FileSpreadsheet,
+    FileType,
+    File,
+    Terminal,
+    Settings,
+    Database,
+    Globe,
+    Lock,
+    Key,
 } from 'lucide-react';
 
-// File icon helper
+// Comprehensive file icon helper
 const getFileIcon = (entry: SftpFileEntry) => {
     if (entry.type === 'directory') return <Folder size={14} />;
-    const ext = entry.name.split('.').pop()?.toLowerCase();
-    switch (ext) {
-        case 'sh':
-        case 'bash':
-        case 'zsh':
-            return <FileCode size={14} className="text-green-500" />;
-        case 'js':
-        case 'ts':
-        case 'jsx':
-        case 'tsx':
-            return <FileCode size={14} className="text-yellow-500" />;
-        case 'py':
-            return <FileCode size={14} className="text-blue-500" />;
-        case 'json':
-        case 'yml':
-        case 'yaml':
-        case 'xml':
-            return <FileCode size={14} className="text-orange-500" />;
-        case 'md':
-        case 'txt':
-            return <FileCode size={14} className="text-muted-foreground" />;
-        default:
-            return <FileCode size={14} />;
-    }
+
+    const ext = entry.name.split('.').pop()?.toLowerCase() || '';
+
+    // Documents
+    if (['doc', 'docx', 'rtf', 'odt'].includes(ext))
+        return <FileText size={14} className="text-blue-500" />;
+    if (['xls', 'xlsx', 'csv', 'ods'].includes(ext))
+        return <FileSpreadsheet size={14} className="text-green-500" />;
+    if (['ppt', 'pptx', 'odp'].includes(ext))
+        return <FileType size={14} className="text-orange-500" />;
+    if (['pdf'].includes(ext))
+        return <FileText size={14} className="text-red-500" />;
+
+    // Code/Scripts
+    if (['js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs'].includes(ext))
+        return <FileCode size={14} className="text-yellow-500" />;
+    if (['py', 'pyc', 'pyw'].includes(ext))
+        return <FileCode size={14} className="text-blue-400" />;
+    if (['sh', 'bash', 'zsh', 'fish', 'bat', 'cmd', 'ps1'].includes(ext))
+        return <Terminal size={14} className="text-green-400" />;
+    if (['c', 'cpp', 'h', 'hpp', 'cc', 'cxx'].includes(ext))
+        return <FileCode size={14} className="text-blue-600" />;
+    if (['java', 'class', 'jar'].includes(ext))
+        return <FileCode size={14} className="text-orange-600" />;
+    if (['go'].includes(ext))
+        return <FileCode size={14} className="text-cyan-500" />;
+    if (['rs'].includes(ext))
+        return <FileCode size={14} className="text-orange-400" />;
+    if (['rb'].includes(ext))
+        return <FileCode size={14} className="text-red-400" />;
+    if (['php'].includes(ext))
+        return <FileCode size={14} className="text-purple-500" />;
+    if (['html', 'htm', 'xhtml'].includes(ext))
+        return <Globe size={14} className="text-orange-500" />;
+    if (['css', 'scss', 'sass', 'less'].includes(ext))
+        return <FileCode size={14} className="text-blue-500" />;
+    if (['vue', 'svelte'].includes(ext))
+        return <FileCode size={14} className="text-green-500" />;
+
+    // Config/Data
+    if (['json', 'json5'].includes(ext))
+        return <FileCode size={14} className="text-yellow-600" />;
+    if (['xml', 'xsl', 'xslt'].includes(ext))
+        return <FileCode size={14} className="text-orange-400" />;
+    if (['yml', 'yaml'].includes(ext))
+        return <Settings size={14} className="text-pink-400" />;
+    if (['toml', 'ini', 'conf', 'cfg', 'config'].includes(ext))
+        return <Settings size={14} className="text-gray-400" />;
+    if (['env'].includes(ext))
+        return <Lock size={14} className="text-yellow-500" />;
+    if (['sql', 'sqlite', 'db'].includes(ext))
+        return <Database size={14} className="text-blue-400" />;
+
+    // Images
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tiff', 'tif', 'heic', 'heif', 'avif'].includes(ext))
+        return <FileImage size={14} className="text-purple-400" />;
+
+    // Videos
+    if (['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp', 'mpeg', 'mpg'].includes(ext))
+        return <FileVideo size={14} className="text-pink-500" />;
+
+    // Audio
+    if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma', 'opus', 'aiff'].includes(ext))
+        return <FileAudio size={14} className="text-green-400" />;
+
+    // Archives
+    if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'tgz', 'tbz2', 'lz', 'lzma', 'cab', 'iso', 'dmg'].includes(ext))
+        return <FileArchive size={14} className="text-amber-500" />;
+
+    // Executables
+    if (['exe', 'msi', 'app', 'deb', 'rpm', 'apk', 'ipa'].includes(ext))
+        return <File size={14} className="text-red-400" />;
+    if (['dll', 'so', 'dylib'].includes(ext))
+        return <File size={14} className="text-gray-500" />;
+
+    // Keys/Certs
+    if (['pem', 'crt', 'cer', 'key', 'pub', 'ppk'].includes(ext))
+        return <Key size={14} className="text-yellow-400" />;
+
+    // Text/Markdown
+    if (['md', 'markdown', 'mdx'].includes(ext))
+        return <FileText size={14} className="text-gray-400" />;
+    if (['txt', 'log', 'text'].includes(ext))
+        return <FileText size={14} className="text-muted-foreground" />;
+
+    // Default
+    return <FileCode size={14} />;
 };
 
 // Breadcrumb component
@@ -120,11 +221,20 @@ const BreadcrumbInner: React.FC<{
 const Breadcrumb = memo(BreadcrumbInner);
 Breadcrumb.displayName = 'Breadcrumb';
 
+// Column widths type
+interface ColumnWidths {
+    name: number;
+    modified: number;
+    size: number;
+    type: number;
+}
+
 // File row component
 const FileRowInner: React.FC<{
     entry: SftpFileEntry;
     isSelected: boolean;
     isDragOver: boolean;
+    columnWidths: ColumnWidths;
     onSelect: (e: React.MouseEvent) => void;
     onOpen: () => void;
     onDragStart: (e: React.DragEvent) => void;
@@ -132,7 +242,7 @@ const FileRowInner: React.FC<{
     onDragOver: (e: React.DragEvent) => void;
     onDragLeave: () => void;
     onDrop: (e: React.DragEvent) => void;
-}> = ({ entry, isSelected, isDragOver, onSelect, onOpen, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop }) => {
+}> = ({ entry, isSelected, isDragOver, columnWidths, onSelect, onOpen, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop }) => {
     const isParentDir = entry.name === '..';
 
     return (
@@ -146,10 +256,11 @@ const FileRowInner: React.FC<{
             onClick={onSelect}
             onDoubleClick={onOpen}
             className={cn(
-                "grid grid-cols-[minmax(0,1fr)_140px_80px_60px] px-4 py-2 items-center cursor-pointer text-sm transition-colors",
+                "px-4 py-2 items-center cursor-pointer text-sm transition-colors",
                 isSelected ? "bg-primary/15 text-foreground" : "hover:bg-secondary/40",
                 isDragOver && entry.type === 'directory' && "bg-primary/25 ring-1 ring-primary/50"
             )}
+            style={{ display: 'grid', gridTemplateColumns: `${columnWidths.name}% ${columnWidths.modified}% ${columnWidths.size}% ${columnWidths.type}%` }}
         >
             <div className="flex items-center gap-3 min-w-0">
                 <div className={cn(
@@ -160,8 +271,10 @@ const FileRowInner: React.FC<{
                 </div>
                 <span className="truncate">{entry.name}</span>
             </div>
-            <span className="text-xs text-muted-foreground truncate">{entry.lastModifiedFormatted}</span>
-            <span className="text-xs text-muted-foreground truncate text-right">{entry.sizeFormatted}</span>
+            <span className="text-xs text-muted-foreground truncate">{formatDate(entry.lastModified)}</span>
+            <span className="text-xs text-muted-foreground truncate text-right">
+                {entry.type === 'directory' ? '--' : formatBytes(entry.size)}
+            </span>
             <span className="text-xs text-muted-foreground truncate capitalize text-right">
                 {entry.type === 'directory' ? 'folder' : entry.name.split('.').pop()?.toLowerCase() || 'file'}
             </span>
@@ -323,6 +436,7 @@ interface SftpPaneViewProps {
     onRefresh: () => void;
     onOpenEntry: (entry: SftpFileEntry) => void;
     onToggleSelection: (fileName: string, multiSelect: boolean) => void;
+    onRangeSelect: (startIdx: number, endIdx: number) => void;
     onClearSelection: () => void;
     onSetFilter: (filter: string) => void;
     onCreateDirectory: (name: string) => Promise<void>;
@@ -348,6 +462,7 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
     onRefresh,
     onOpenEntry,
     onToggleSelection,
+    onRangeSelect,
     onClearSelection,
     onSetFilter,
     onCreateDirectory,
@@ -372,6 +487,20 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
     const [dragOverEntry, setDragOverEntry] = useState<string | null>(null);
     const [isDragOverPane, setIsDragOverPane] = useState(false);
     const fileListRef = useRef<HTMLDivElement>(null);
+    const lastSelectedIndexRef = useRef<number | null>(null);
+
+    // Sorting state
+    const [sortField, setSortField] = useState<SortField>('name');
+    const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+
+    // Column widths (percentages)
+    const [columnWidths, setColumnWidths] = useState<ColumnWidths>({ name: 45, modified: 25, size: 15, type: 15 });
+    const resizingRef = useRef<{ field: keyof ColumnWidths; startX: number; startWidth: number } | null>(null);
+
+    // Editable path state
+    const [isEditingPath, setIsEditingPath] = useState(false);
+    const [editingPathValue, setEditingPathValue] = useState('');
+    const pathInputRef = useRef<HTMLInputElement>(null);
 
     const filteredHosts = useMemo(() => {
         const term = hostSearch.trim().toLowerCase();
@@ -396,6 +525,99 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
         };
         return [parentEntry, ...filteredFiles.filter(f => f.name !== '..')];
     }, [pane.connection, filteredFiles]);
+
+    // Sorted files
+    const sortedDisplayFiles = useMemo(() => {
+        if (!displayFiles.length) return displayFiles;
+
+        // Separate parent entry (..) from the rest
+        const parentEntry = displayFiles.find(f => f.name === '..');
+        const otherFiles = displayFiles.filter(f => f.name !== '..');
+
+        const sorted = [...otherFiles].sort((a, b) => {
+            // Directories always first (except when sorting by type)
+            if (sortField !== 'type') {
+                if (a.type === 'directory' && b.type !== 'directory') return -1;
+                if (a.type !== 'directory' && b.type === 'directory') return 1;
+            }
+
+            let cmp = 0;
+            switch (sortField) {
+                case 'name':
+                    cmp = a.name.localeCompare(b.name);
+                    break;
+                case 'size':
+                    cmp = (a.size || 0) - (b.size || 0);
+                    break;
+                case 'modified':
+                    cmp = (a.lastModified || 0) - (b.lastModified || 0);
+                    break;
+                case 'type':
+                    const extA = a.type === 'directory' ? 'folder' : a.name.split('.').pop()?.toLowerCase() || '';
+                    const extB = b.type === 'directory' ? 'folder' : b.name.split('.').pop()?.toLowerCase() || '';
+                    cmp = extA.localeCompare(extB);
+                    break;
+            }
+            return sortOrder === 'asc' ? cmp : -cmp;
+        });
+
+        return parentEntry ? [parentEntry, ...sorted] : sorted;
+    }, [displayFiles, sortField, sortOrder]);
+
+    const handleSort = (field: SortField) => {
+        if (sortField === field) {
+            setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortField(field);
+            setSortOrder('asc');
+        }
+    };
+
+    // Column resize handlers
+    const handleResizeStart = (field: keyof ColumnWidths, e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        resizingRef.current = { field, startX: e.clientX, startWidth: columnWidths[field] };
+        document.addEventListener('mousemove', handleResizeMove);
+        document.addEventListener('mouseup', handleResizeEnd);
+    };
+
+    const handleResizeMove = useCallback((e: MouseEvent) => {
+        if (!resizingRef.current) return;
+        const diff = e.clientX - resizingRef.current.startX;
+        const newWidth = Math.max(10, Math.min(60, resizingRef.current.startWidth + diff / 5));
+        setColumnWidths(prev => ({ ...prev, [resizingRef.current!.field]: newWidth }));
+    }, []);
+
+    const handleResizeEnd = useCallback(() => {
+        resizingRef.current = null;
+        document.removeEventListener('mousemove', handleResizeMove);
+        document.removeEventListener('mouseup', handleResizeEnd);
+    }, [handleResizeMove]);
+
+    // Path editing handlers
+    const handlePathDoubleClick = () => {
+        if (!pane.connection) return;
+        setEditingPathValue(pane.connection.currentPath);
+        setIsEditingPath(true);
+        setTimeout(() => pathInputRef.current?.select(), 0);
+    };
+
+    const handlePathSubmit = () => {
+        const newPath = editingPathValue.trim() || '/';
+        setIsEditingPath(false);
+        if (pane.connection && newPath !== pane.connection.currentPath) {
+            onNavigateTo(newPath.startsWith('/') ? newPath : `/${newPath}`);
+        }
+    };
+
+    const handlePathKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handlePathSubmit();
+        } else if (e.key === 'Escape') {
+            setIsEditingPath(false);
+        }
+    };
 
     const handleCreateFolder = async () => {
         if (!newFolderName.trim()) return;
@@ -463,7 +685,7 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
 
         const selectedNames = Array.from(pane.selectedFiles);
         const files = selectedNames.includes(entry.name)
-            ? displayFiles.filter(f => selectedNames.includes(f.name)).map(f => ({
+            ? sortedDisplayFiles.filter(f => selectedNames.includes(f.name)).map(f => ({
                 name: f.name,
                 isDirectory: f.type === 'directory',
                 side,
@@ -662,11 +884,32 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNavigateUp} title="Go up">
                     <ChevronLeft size={14} />
                 </Button>
-                <Breadcrumb
-                    path={pane.connection.currentPath}
-                    onNavigate={onNavigateTo}
-                    onHome={() => pane.connection?.homeDir && onNavigateTo(pane.connection.homeDir)}
-                />
+
+                {/* Editable Breadcrumb */}
+                {isEditingPath ? (
+                    <Input
+                        ref={pathInputRef}
+                        value={editingPathValue}
+                        onChange={(e) => setEditingPathValue(e.target.value)}
+                        onBlur={handlePathSubmit}
+                        onKeyDown={handlePathKeyDown}
+                        className="h-7 flex-1 text-xs bg-background"
+                        autoFocus
+                    />
+                ) : (
+                    <div
+                        className="flex-1 cursor-text hover:bg-secondary/50 rounded px-1 transition-colors"
+                        onDoubleClick={handlePathDoubleClick}
+                        title="Double-click to edit path"
+                    >
+                        <Breadcrumb
+                            path={pane.connection.currentPath}
+                            onNavigate={onNavigateTo}
+                            onHome={() => pane.connection?.homeDir && onNavigateTo(pane.connection.homeDir)}
+                        />
+                    </div>
+                )}
+
                 <div className="ml-auto flex items-center gap-1">
                     <Button
                         variant="ghost"
@@ -679,12 +922,59 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
                 </div>
             </div>
 
-            {/* File list header */}
-            <div className="grid grid-cols-[minmax(0,1fr)_140px_80px_60px] text-[11px] uppercase tracking-wide text-muted-foreground px-4 py-2 border-b border-border/40 bg-secondary/10">
-                <span>Name</span>
-                <span>Modified</span>
-                <span className="text-right">Size</span>
-                <span className="text-right">Kind</span>
+            {/* File list header with sortable columns and resize handles */}
+            <div
+                className="text-[11px] uppercase tracking-wide text-muted-foreground px-4 py-2 border-b border-border/40 bg-secondary/10 select-none"
+                style={{ display: 'grid', gridTemplateColumns: `${columnWidths.name}% ${columnWidths.modified}% ${columnWidths.size}% ${columnWidths.type}%` }}
+            >
+                <div
+                    className="flex items-center gap-1 cursor-pointer hover:text-foreground relative pr-2"
+                    onClick={() => handleSort('name')}
+                >
+                    <span>Name</span>
+                    {sortField === 'name' && (
+                        <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                    <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
+                        onMouseDown={(e) => handleResizeStart('name', e)}
+                    />
+                </div>
+                <div
+                    className="flex items-center gap-1 cursor-pointer hover:text-foreground relative pr-2"
+                    onClick={() => handleSort('modified')}
+                >
+                    <span>Modified</span>
+                    {sortField === 'modified' && (
+                        <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                    <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
+                        onMouseDown={(e) => handleResizeStart('modified', e)}
+                    />
+                </div>
+                <div
+                    className="flex items-center gap-1 cursor-pointer hover:text-foreground relative pr-2 justify-end"
+                    onClick={() => handleSort('size')}
+                >
+                    {sortField === 'size' && (
+                        <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                    <span>Size</span>
+                    <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
+                        onMouseDown={(e) => handleResizeStart('size', e)}
+                    />
+                </div>
+                <div
+                    className="flex items-center gap-1 cursor-pointer hover:text-foreground justify-end"
+                    onClick={() => handleSort('type')}
+                >
+                    {sortField === 'type' && (
+                        <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                    <span>Kind</span>
+                </div>
             </div>
 
             {/* File list */}
@@ -695,7 +985,7 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
                     isDragOverPane && "ring-2 ring-primary/30 ring-inset"
                 )}
             >
-                {pane.loading && displayFiles.length === 0 ? (
+                {pane.loading && sortedDisplayFiles.length === 0 ? (
                     <div className="flex items-center justify-center h-full">
                         <Loader2 size={24} className="animate-spin text-muted-foreground" />
                     </div>
@@ -707,23 +997,34 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
                             Retry
                         </Button>
                     </div>
-                ) : displayFiles.length === 0 ? (
+                ) : sortedDisplayFiles.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                         <Folder size={32} className="mb-2 opacity-50" />
                         <span className="text-sm">Empty directory</span>
                     </div>
                 ) : (
                     <div className="divide-y divide-border/30">
-                        {displayFiles.map((entry, idx) => (
+                        {sortedDisplayFiles.map((entry, idx) => (
                             <ContextMenu key={`${entry.name}-${idx}`}>
                                 <ContextMenuTrigger>
                                     <FileRow
                                         entry={entry}
                                         isSelected={pane.selectedFiles.has(entry.name)}
                                         isDragOver={dragOverEntry === entry.name}
+                                        columnWidths={columnWidths}
                                         onSelect={(e) => {
                                             if (entry.name === '..') return;
-                                            onToggleSelection(entry.name, e.ctrlKey || e.metaKey);
+
+                                            if (e.shiftKey && lastSelectedIndexRef.current !== null) {
+                                                // Shift-click: range select
+                                                const start = Math.min(lastSelectedIndexRef.current, idx);
+                                                const end = Math.max(lastSelectedIndexRef.current, idx);
+                                                onRangeSelect(start, end);
+                                            } else {
+                                                // Normal or Ctrl/Cmd click
+                                                onToggleSelection(entry.name, e.ctrlKey || e.metaKey);
+                                                lastSelectedIndexRef.current = idx;
+                                            }
                                         }}
                                         onOpen={() => onOpenEntry(entry)}
                                         onDragStart={(e) => handleFileDragStart(entry, e)}
@@ -744,7 +1045,7 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
                                                 ? Array.from(pane.selectedFiles)
                                                 : [entry.name];
                                             const fileData = files.map(name => {
-                                                const file = displayFiles.find(f => f.name === name);
+                                                const file = sortedDisplayFiles.find(f => f.name === name);
                                                 return { name, isDirectory: file?.type === 'directory' || false };
                                             });
                                             onCopyToOtherPane(fileData);
@@ -799,7 +1100,7 @@ const SftpPaneViewInner: React.FC<SftpPaneViewProps> = ({
             {/* Footer - pinned at bottom */}
             <div className="h-9 shrink-0 px-4 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40 bg-secondary/30">
                 <span>
-                    {displayFiles.filter(f => f.name !== '..').length} items
+                    {sortedDisplayFiles.filter(f => f.name !== '..').length} items
                     {pane.selectedFiles.size > 0 && ` • ${pane.selectedFiles.size} selected`}
                 </span>
                 <span className="truncate max-w-[200px]">{pane.connection.currentPath}</span>
@@ -1247,6 +1548,8 @@ const SftpViewInner: React.FC<SftpViewProps> = ({ hosts, keys }) => {
     const handleOpenEntryRight = useCallback((entry: SftpFileEntry) => sftp.openEntry('right', entry), [sftp.openEntry]);
     const handleToggleSelectionLeft = useCallback((name: string, multi: boolean) => sftp.toggleSelection('left', name, multi), [sftp.toggleSelection]);
     const handleToggleSelectionRight = useCallback((name: string, multi: boolean) => sftp.toggleSelection('right', name, multi), [sftp.toggleSelection]);
+    const handleRangeSelectLeft = useCallback((start: number, end: number) => sftp.rangeSelect('left', start, end), [sftp.rangeSelect]);
+    const handleRangeSelectRight = useCallback((start: number, end: number) => sftp.rangeSelect('right', start, end), [sftp.rangeSelect]);
     const handleClearSelectionLeft = useCallback(() => sftp.clearSelection('left'), [sftp.clearSelection]);
     const handleClearSelectionRight = useCallback(() => sftp.clearSelection('right'), [sftp.clearSelection]);
     const handleSetFilterLeft = useCallback((filter: string) => sftp.setFilter('left', filter), [sftp.setFilter]);
@@ -1280,7 +1583,7 @@ const SftpViewInner: React.FC<SftpViewProps> = ({ hosts, keys }) => {
             style={containerStyle}
         >
             {/* Main content */}
-            <div className="flex-1 grid grid-cols-1 xl:grid-cols-2 min-h-0 border-t border-border/70">
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 min-h-0 border-t border-border/70">
                 {/* Left pane */}
                 <div className="relative border-r border-border/70">
                     <SftpPaneView
@@ -1295,6 +1598,7 @@ const SftpViewInner: React.FC<SftpViewProps> = ({ hosts, keys }) => {
                         onRefresh={handleRefreshLeft}
                         onOpenEntry={handleOpenEntryLeft}
                         onToggleSelection={handleToggleSelectionLeft}
+                        onRangeSelect={handleRangeSelectLeft}
                         onClearSelection={handleClearSelectionLeft}
                         onSetFilter={handleSetFilterLeft}
                         onCreateDirectory={handleCreateDirectoryLeft}
@@ -1323,6 +1627,7 @@ const SftpViewInner: React.FC<SftpViewProps> = ({ hosts, keys }) => {
                         onRefresh={handleRefreshRight}
                         onOpenEntry={handleOpenEntryRight}
                         onToggleSelection={handleToggleSelectionRight}
+                        onRangeSelect={handleRangeSelectRight}
                         onClearSelection={handleClearSelectionRight}
                         onSetFilter={handleSetFilterRight}
                         onCreateDirectory={handleCreateDirectoryRight}

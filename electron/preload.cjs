@@ -82,6 +82,52 @@ ipcRenderer.on("nebula:transfer:cancelled", (_event, payload) => {
   transferErrorListeners.delete(payload.transferId);
 });
 
+// Upload with progress listeners
+const uploadProgressListeners = new Map();
+const uploadCompleteListeners = new Map();
+const uploadErrorListeners = new Map();
+
+ipcRenderer.on("nebula:upload:progress", (_event, payload) => {
+  const cb = uploadProgressListeners.get(payload.transferId);
+  if (cb) {
+    try {
+      cb(payload.transferred, payload.totalBytes, payload.speed);
+    } catch (err) {
+      console.error("Upload progress callback failed", err);
+    }
+  }
+});
+
+ipcRenderer.on("nebula:upload:complete", (_event, payload) => {
+  const cb = uploadCompleteListeners.get(payload.transferId);
+  if (cb) {
+    try {
+      cb();
+    } catch (err) {
+      console.error("Upload complete callback failed", err);
+    }
+  }
+  // Cleanup listeners
+  uploadProgressListeners.delete(payload.transferId);
+  uploadCompleteListeners.delete(payload.transferId);
+  uploadErrorListeners.delete(payload.transferId);
+});
+
+ipcRenderer.on("nebula:upload:error", (_event, payload) => {
+  const cb = uploadErrorListeners.get(payload.transferId);
+  if (cb) {
+    try {
+      cb(payload.error);
+    } catch (err) {
+      console.error("Upload error callback failed", err);
+    }
+  }
+  // Cleanup listeners
+  uploadProgressListeners.delete(payload.transferId);
+  uploadCompleteListeners.delete(payload.transferId);
+  uploadErrorListeners.delete(payload.transferId);
+});
+
 // Port forwarding status listeners
 const portForwardStatusListeners = new Map();
 
@@ -160,6 +206,20 @@ const api = {
   },
   chmodSftp: async (sftpId, path, mode) => {
     return ipcRenderer.invoke("nebula:sftp:chmod", { sftpId, path, mode });
+  },
+  // Write binary with real-time progress callback
+  writeSftpBinaryWithProgress: async (sftpId, path, content, transferId, onProgress, onComplete, onError) => {
+    // Register callbacks
+    if (onProgress) uploadProgressListeners.set(transferId, onProgress);
+    if (onComplete) uploadCompleteListeners.set(transferId, onComplete);
+    if (onError) uploadErrorListeners.set(transferId, onError);
+    
+    return ipcRenderer.invoke("nebula:sftp:writeBinaryWithProgress", { 
+      sftpId, 
+      path, 
+      content, 
+      transferId 
+    });
   },
   // Local filesystem operations
   listLocalDir: async (path) => {

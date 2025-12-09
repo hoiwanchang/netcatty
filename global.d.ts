@@ -98,6 +98,17 @@ interface NebulaBridge {
   statSftp?(sftpId: string, path: string): Promise<SftpStatResult>;
   chmodSftp?(sftpId: string, path: string, mode: string): Promise<void>;
   
+  // Write binary with real-time progress callback
+  writeSftpBinaryWithProgress?(
+    sftpId: string, 
+    path: string, 
+    content: ArrayBuffer, 
+    transferId: string,
+    onProgress?: (transferred: number, total: number, speed: number) => void,
+    onComplete?: () => void,
+    onError?: (error: string) => void
+  ): Promise<{ success: boolean; transferId: string }>;
+  
   // Transfer with progress
   uploadFile?(sftpId: string, localPath: string, remotePath: string, transferId: string): Promise<void>;
   downloadFile?(sftpId: string, remotePath: string, localPath: string, transferId: string): Promise<void>;
