@@ -94,7 +94,7 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
   const renderCountRef = React.useRef(0);
   renderCountRef.current++;
   console.log(`[VaultViewInner] render #${renderCountRef.current} - knownHosts: ${knownHosts.length}`);
-  
+
   const [currentSection, setCurrentSection] = useState<VaultSection>('hosts');
   const [search, setSearch] = useState('');
   const [selectedGroupPath, setSelectedGroupPath] = useState<string | null>(null);
@@ -162,7 +162,7 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
   // Store latest values in refs so callbacks don't need to depend on them
   const knownHostsRef = React.useRef(knownHosts);
   const onUpdateKnownHostsRef = React.useRef(onUpdateKnownHosts);
-  
+
   // Keep refs up to date
   React.useEffect(() => {
     knownHostsRef.current = knownHosts;
@@ -545,9 +545,9 @@ const vaultViewAreEqual = (prev: VaultViewProps, next: VaultViewProps): boolean 
     prev.sessions === next.sessions &&
     prev.showAssistant === next.showAssistant
   );
-  
+
   console.log('[VaultView memo] comparing, isEqual:', isEqual);
-  
+
   if (!isEqual) {
     console.log('[VaultView memo] props changed:', {
       hosts: prev.hosts !== next.hosts,
@@ -560,7 +560,7 @@ const vaultViewAreEqual = (prev: VaultViewProps, next: VaultViewProps): boolean 
       showAssistant: prev.showAssistant !== next.showAssistant,
     });
   }
-  
+
   return isEqual;
 };
 

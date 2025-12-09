@@ -24,7 +24,7 @@ const VaultViewContainer: React.FC<{ children: React.ReactNode }> = ({ children 
   const containerStyle: React.CSSProperties = isActive
     ? {}
     : { visibility: 'hidden', pointerEvents: 'none', position: 'absolute', zIndex: -1 };
-  
+
   return (
     <div className={cn("absolute inset-0", isActive ? "z-20" : "")} style={containerStyle}>
       {children}
@@ -34,7 +34,7 @@ const VaultViewContainer: React.FC<{ children: React.ReactNode }> = ({ children 
 
 function App() {
   console.log('[App] render');
-  
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isQuickSwitcherOpen, setIsQuickSwitcherOpen] = useState(false);

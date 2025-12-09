@@ -307,7 +307,7 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
     const renderCountRef = React.useRef(0);
     renderCountRef.current++;
     console.log(`[KnownHostsManager] render #${renderCountRef.current} - knownHosts: ${knownHosts.length}, hosts: ${hosts.length}`);
-    
+
     const [search, setSearch] = useState('');
     const deferredSearch = useDeferredValue(search);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -465,7 +465,7 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
     const setSortNewest = useCallback(() => { setSortBy('newest'); setSortPopoverOpen(false); }, []);
     const setSortOldest = useCallback(() => { setSortBy('oldest'); setSortPopoverOpen(false); }, []);
     const openFilePicker = useCallback(() => fileInputRef.current?.click(), []);
-    
+
     // Import dialog handler
     const handleToggleSelected = useCallback((id: string, checked: boolean) => {
         setSelectedIds(prev => {
@@ -478,7 +478,7 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
             return next;
         });
     }, []);
-    
+
     const closeImportDialog = useCallback(() => setIsImportDialogOpen(false), []);
 
     // Memoize the rendered list to prevent re-renders
@@ -497,7 +497,7 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
     }, [displayedHosts, convertedMap, viewMode, handleDelete, handleConvertToHost]);
 
     console.log('[KnownHostsManager] about to return JSX');
-    
+
     return (
         <div className="h-full flex flex-col">
             {/* Header */}
