@@ -99,14 +99,14 @@ const createBiometricCredential = async (label: string): Promise<{
         // The rpId must match the origin's effective domain
         let rpId: string;
         const hostname = window.location.hostname;
-        
+
         // In Electron file:// protocol or localhost dev server
         if (!hostname || hostname === '' || hostname === 'localhost' || hostname === '127.0.0.1') {
             rpId = 'localhost';
         } else {
             rpId = hostname;
         }
-        
+
         const userId = new TextEncoder().encode(crypto.randomUUID());
 
         const credential = await navigator.credentials.create({

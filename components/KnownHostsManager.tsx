@@ -294,7 +294,7 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
     // Sort and filter hosts
     const filteredHosts = useMemo(() => {
         let result = knownHosts;
-        
+
         // Filter by search
         if (deferredSearch.trim()) {
             const term = deferredSearch.toLowerCase();
@@ -304,7 +304,7 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
                     h.keyType.toLowerCase().includes(term)
             );
         }
-        
+
         // Sort
         result = [...result].sort((a, b) => {
             switch (sortBy) {
@@ -320,7 +320,7 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
                     return 0;
             }
         });
-        
+
         return result;
     }, [knownHosts, deferredSearch, sortBy]);
 
@@ -433,7 +433,7 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
 
     // Memoize host lookup for performance
     const hostIdSet = useMemo(() => new Set(hosts.map(h => h.id)), [hosts]);
-    
+
     // Check if a known host has been converted to a managed host
     const isConverted = useCallback((knownHost: KnownHost) => {
         if (knownHost.convertedToHostId) {
@@ -499,7 +499,7 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
                             </button>
                         </PopoverContent>
                     </Popover>
-                    
+
                     {/* Sort Toggle */}
                     <Popover open={sortPopoverOpen} onOpenChange={setSortPopoverOpen}>
                         <PopoverTrigger asChild>
