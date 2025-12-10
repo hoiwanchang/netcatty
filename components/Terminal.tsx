@@ -156,9 +156,11 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         if (disposed || !containerRef.current) return;
 
         const term = new GhosttyTerminal({
-          cursorBlink: true,
+          cursorBlink: false,  // Disable cursor blinking for better performance
           fontSize,
           fontFamily: '"JetBrains Mono", "Cascadia Code", "Fira Code", "SF Mono", "Menlo", "DejaVu Sans Mono", monospace',
+          scrollback: 5000,  // Reduced from default 10000 for better performance
+          smoothScrollDuration: 0,  // Disable smooth scrolling to reduce render overhead
           theme: {
             ...terminalTheme.colors,
             selectionBackground: terminalTheme.colors.selection,
@@ -352,10 +354,10 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       if (resizeTimeout) {
         clearTimeout(resizeTimeout);
       }
-      // Wait 150ms after last resize event before fitting
+      // Wait 250ms after last resize event before fitting (increased for performance)
       resizeTimeout = setTimeout(() => {
         safeFit();
-      }, 150);
+      }, 250);
     });
 
     observer.observe(containerRef.current);
@@ -372,7 +374,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       // Resizing just ended, fit the terminal
       const timer = setTimeout(() => {
         safeFit();
-      }, 50);
+      }, 100);
       return () => clearTimeout(timer);
     }
     prevIsResizingRef.current = isResizing;
@@ -396,10 +398,10 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       if (resizeTimeout) {
         clearTimeout(resizeTimeout);
       }
-      // Wait 150ms after last resize event before fitting
+      // Wait 250ms after last resize event before fitting (increased for performance)
       resizeTimeout = setTimeout(() => {
         safeFit();
-      }, 150);
+      }, 250);
     };
 
     window.addEventListener('resize', handler);
