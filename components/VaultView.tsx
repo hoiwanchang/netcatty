@@ -398,13 +398,13 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
             <div className="h-14 px-4 py-2 flex items-center gap-3">
               <div className="relative flex-1">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input 
-                  placeholder="Find a host or ssh user@hostname..." 
+                <Input
+                  placeholder="Find a host or ssh user@hostname..."
                   className={cn(
                     "pl-9 h-11 bg-secondary border-border/60 text-sm",
                     isSearchQuickConnect && "border-primary/50 ring-1 ring-primary/20"
-                  )} 
-                  value={search} 
+                  )}
+                  value={search}
                   onChange={e => setSearch(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
                 />
@@ -414,9 +414,9 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
                   </div>
                 )}
               </div>
-              <Button 
-                variant={isSearchQuickConnect ? "default" : "secondary"} 
-                className="h-11 px-4" 
+              <Button
+                variant={isSearchQuickConnect ? "default" : "secondary"}
+                className="h-11 px-4"
                 onClick={handleConnectClick}
               >
                 Connect

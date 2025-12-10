@@ -632,7 +632,7 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
           // Update telnet protocol theme
           const telnetConfig = form.protocols?.find(p => p.protocol === 'telnet');
           if (telnetConfig) {
-            const newProtocols = form.protocols?.map(p => 
+            const newProtocols = form.protocols?.map(p =>
               p.protocol === 'telnet' ? { ...p, theme: themeId } : p
             );
             setForm(prev => ({ ...prev, protocols: newProtocols }));
@@ -751,16 +751,16 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
               <span className="text-xs text-muted-foreground">port</span>
             </div>
           </div>
-          
+
           {/* SSH Theme Selection */}
           <button
             type="button"
             className="w-full flex items-center gap-3 p-2 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors text-left"
             onClick={() => setActiveSubPanel("theme-select")}
           >
-            <div 
+            <div
               className="w-12 h-8 rounded-md border border-border/60 flex items-center justify-center text-[6px] font-mono overflow-hidden"
-              style={{ 
+              style={{
                 backgroundColor: TERMINAL_THEMES.find(t => t.id === (form.theme || 'flexoki-dark'))?.colors.background || '#100F0F',
                 color: TERMINAL_THEMES.find(t => t.id === (form.theme || 'flexoki-dark'))?.colors.foreground || '#CECDC3'
               }}
@@ -802,26 +802,26 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
 
               {/* Telnet Credentials */}
               <p className="text-xs font-semibold">Credentials</p>
-              <Input 
-                placeholder="Username" 
-                value={form.username} 
-                onChange={(e) => update("username", e.target.value)} 
-                className="h-10" 
+              <Input
+                placeholder="Username"
+                value={form.username}
+                onChange={(e) => update("username", e.target.value)}
+                className="h-10"
               />
-              <Input 
-                placeholder="Password" 
-                type="password" 
-                value={form.password || ""} 
-                onChange={(e) => update("password", e.target.value)} 
-                className="h-10" 
+              <Input
+                placeholder="Password"
+                type="password"
+                value={form.password || ""}
+                onChange={(e) => update("password", e.target.value)}
+                className="h-10"
               />
 
               {/* Telnet Charset */}
-              <Input 
-                placeholder="Charset (e.g. UTF-8)" 
-                value={form.charset || "UTF-8"} 
-                onChange={(e) => update("charset", e.target.value)} 
-                className="h-10" 
+              <Input
+                placeholder="Charset (e.g. UTF-8)"
+                value={form.charset || "UTF-8"}
+                onChange={(e) => update("charset", e.target.value)}
+                className="h-10"
               />
 
               {/* Telnet Theme Selection */}
@@ -830,9 +830,9 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
                 className="w-full flex items-center gap-3 p-2 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors text-left"
                 onClick={() => setActiveSubPanel("telnet-theme-select")}
               >
-                <div 
+                <div
                   className="w-12 h-8 rounded-md border border-border/60 flex items-center justify-center text-[6px] font-mono overflow-hidden"
-                  style={{ 
+                  style={{
                     backgroundColor: TERMINAL_THEMES.find(t => t.id === (form.protocols?.find(p => p.protocol === 'telnet')?.theme || form.theme || 'flexoki-dark'))?.colors.background || '#100F0F',
                     color: TERMINAL_THEMES.find(t => t.id === (form.protocols?.find(p => p.protocol === 'telnet')?.theme || form.theme || 'flexoki-dark'))?.colors.foreground || '#CECDC3'
                   }}
