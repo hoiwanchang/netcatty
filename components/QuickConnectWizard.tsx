@@ -603,8 +603,8 @@ const QuickConnectWizard: React.FC<QuickConnectWizardProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="w-[560px] max-w-[90vw] bg-background border border-border rounded-2xl shadow-2xl animate-in fade-in-0 zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
+            <div className="w-[560px] max-w-[90vw] bg-background border border-border rounded-2xl animate-in fade-in-0 zoom-in-95 duration-200" style={{ boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 12px 24px -8px rgba(0, 0, 0, 0.15)' }} onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="px-6 py-5 border-b border-border/50">
                     <div className="flex items-center justify-between">
