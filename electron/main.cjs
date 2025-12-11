@@ -57,6 +57,35 @@ const windowManager = require("./bridges/windowManager.cjs");
 // GPU settings
 app.commandLine.appendSwitch("no-sandbox");
 
+// Silence noisy DevTools Autofill CDP errors (Electron's backend doesn't expose this domain)
+app.on("web-contents-created", (_event, contents) => {
+  if (contents.getType() !== "devtools") return;
+  // Drop console output from Autofill requests in DevTools frontend
+  contents.on("did-finish-load", () => {
+    contents
+      .executeJavaScript(`
+        (() => {
+          const block = (methodName) => {
+            const original = console[methodName];
+            if (!original) return;
+            console[methodName] = (...args) => {
+              if (args.some(arg => typeof arg === "string" && arg.includes("Autofill."))) return;
+              original(...args);
+            };
+          };
+          block("error");
+          block("warn");
+        })();
+      `)
+      .catch(() => {});
+  });
+  contents.on("console-message", (event, _level, message, _line, sourceId) => {
+    if (sourceId?.startsWith("devtools://") && message.includes("Autofill.")) {
+      event.preventDefault();
+    }
+  });
+});
+
 // Application configuration
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 const isDev = !!devServerUrl;

@@ -204,6 +204,8 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 
         const term = new XTerm({
           cursorBlink: false, // Disable cursor blinking for better performance
+          allowTransparency: false, // Disable transparency for better performance
+          customGlyphs: false, // Disable custom glyphs if not needed for better performance
           fontSize,
           fontFamily:
             '"JetBrains Mono", "Cascadia Code", "Fira Code", "SF Mono", "Menlo", "DejaVu Sans Mono", monospace',

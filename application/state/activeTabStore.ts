@@ -12,7 +12,10 @@ class ActiveTabStore {
   setActiveTabId = (id: string) => {
     if (this.activeTabId !== id) {
       this.activeTabId = id;
-      this.listeners.forEach(listener => listener());
+      // Defer listener notification to avoid "setState during render" if called from a render phase
+      Promise.resolve().then(() => {
+        this.listeners.forEach(listener => listener());
+      });
     }
   };
 

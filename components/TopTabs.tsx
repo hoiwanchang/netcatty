@@ -244,15 +244,14 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
     const midpoint = rect.left + rect.width / 2;
     const position: 'before' | 'after' = e.clientX < midpoint ? 'before' : 'after';
 
+    // Always update drop indicator on drag over to ensure it doesn't get stuck
     setDropIndicator({ tabId, position });
   }, []);
 
-  const handleTabDragLeave = useCallback((e: React.DragEvent) => {
-    // Only clear if we're leaving the tab entirely (not moving to a child element)
-    const relatedTarget = e.relatedTarget as HTMLElement | null;
-    if (!e.currentTarget.contains(relatedTarget)) {
-      setDropIndicator(null);
-    }
+  const handleTabDragLeave = useCallback((_e: React.DragEvent) => {
+    // Don't clear drop indicator on drag leave - let onDragOver manage it
+    // This prevents the indicator from flickering/disappearing during fast drags
+    // The indicator will be cleared when drag ends or on drop
   }, []);
 
   const handleTabDrop = useCallback((e: React.DragEvent, targetTabId: string) => {
@@ -470,7 +469,18 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
         </div>
 
         {/* Scrollable tabs container with fade masks */}
-        <div className="relative min-w-0 flex-1 app-drag" style={dragRegionStyle}>
+        <div 
+          className="relative min-w-0 flex-1 flex app-drag" 
+          style={dragRegionStyle}
+          // Add container-level drag handlers to prevent indicator loss
+          onDragOver={(e) => {
+            // Keep drop indicator active while dragging over the container
+            if (draggedTabIdRef.current && isDraggingForReorder && !dropIndicator) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }
+          }}
+        >
           {/* Left fade mask */}
           {canScrollLeft && (
             <div
@@ -482,7 +492,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
           {/* Scrollable container */}
           <div
             ref={tabsContainerRef}
-            className="flex items-center gap-2 overflow-x-auto scrollbar-none app-drag"
+            className="flex items-center gap-2 overflow-x-auto scrollbar-none app-drag max-w-full"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {renderOrderedTabs()}
@@ -498,8 +508,8 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
                 <Plus size={14} />
               </Button>
             )}
-            {/* Draggable spacer - fills remaining space */}
-            <div className="flex-1 min-w-[20px] app-drag" />
+            {/* Draggable spacer - fixed width handle at the end */}
+            <div className="min-w-[20px] h-8 app-drag flex-shrink-0" style={dragRegionStyle} />
           </div>
 
           {/* Right fade mask */}
