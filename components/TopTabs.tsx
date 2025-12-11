@@ -435,7 +435,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
   }, [isMacClient]);
 
   return (
-    <div 
+    <div
       className="relative w-full bg-secondary border-b border-border/60 app-drag"
       style={dragRegionNoSelect}
       onDoubleClick={handleTitleBarDoubleClick}
@@ -469,8 +469,8 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
         </div>
 
         {/* Scrollable tabs container with fade masks */}
-        <div 
-          className="relative min-w-0 flex-1 flex app-drag" 
+        <div
+          className="relative min-w-0 flex-1 flex app-drag"
           style={dragRegionStyle}
           // Add container-level drag handlers to prevent indicator loss
           onDragOver={(e) => {
