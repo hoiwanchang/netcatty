@@ -167,10 +167,14 @@ async function connectThroughChain(event, options, jumpHosts, targetHost, target
         host: jump.hostname,
         port: jump.port || 22,
         username: jump.username || 'root',
-        readyTimeout: 60000,
-        keepaliveInterval: 5000,
+        readyTimeout: 20000, // Reduced from 60s for faster failure detection
+        keepaliveInterval: 10000,
+        keepaliveCountMax: 3,
         algorithms: {
+          // Prioritize fastest ciphers (GCM modes are hardware-accelerated)
           cipher: ['aes128-gcm@openssh.com', 'aes256-gcm@openssh.com', 'aes128-ctr', 'aes256-ctr'],
+          // Prioritize faster key exchange
+          kex: ['curve25519-sha256', 'curve25519-sha256@libssh.org', 'ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'diffie-hellman-group14-sha256'],
           compress: ['none'],
         },
       };
@@ -297,10 +301,14 @@ async function startSSHSession(event, options) {
       host: options.hostname,
       port: options.port || 22,
       username: options.username || "root",
-      readyTimeout: 60000,
-      keepaliveInterval: 5000,
+      readyTimeout: 20000, // Reduced from 60s for faster failure detection
+      keepaliveInterval: 10000,
+      keepaliveCountMax: 3,
       algorithms: {
+        // Prioritize fastest ciphers (GCM modes are hardware-accelerated)
         cipher: ['aes128-gcm@openssh.com', 'aes256-gcm@openssh.com', 'aes128-ctr', 'aes256-ctr'],
+        // Prioritize faster key exchange
+        kex: ['curve25519-sha256', 'curve25519-sha256@libssh.org', 'ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'diffie-hellman-group14-sha256'],
         compress: ['none'],
       },
     };
@@ -393,17 +401,50 @@ async function startSSHSession(event, options) {
             };
             sessions.set(sessionId, session);
 
+            // Data buffering for reduced IPC overhead
+            let dataBuffer = '';
+            let flushTimeout = null;
+            const FLUSH_INTERVAL = 8; // ms - flush every 8ms for ~120fps equivalent
+            const MAX_BUFFER_SIZE = 16384; // 16KB - flush immediately if buffer gets too large
+            
+            const flushBuffer = () => {
+              if (dataBuffer.length > 0) {
+                const contents = electronModule.BrowserWindow.fromWebContents(event.sender)?.webContents;
+                contents?.send("nebula:data", { sessionId, data: dataBuffer });
+                dataBuffer = '';
+              }
+              flushTimeout = null;
+            };
+            
+            const bufferData = (data) => {
+              dataBuffer += data;
+              // Immediate flush for large chunks
+              if (dataBuffer.length >= MAX_BUFFER_SIZE) {
+                if (flushTimeout) {
+                  clearTimeout(flushTimeout);
+                  flushTimeout = null;
+                }
+                flushBuffer();
+              } else if (!flushTimeout) {
+                // Schedule flush
+                flushTimeout = setTimeout(flushBuffer, FLUSH_INTERVAL);
+              }
+            };
+
             stream.on("data", (data) => {
-              const contents = electronModule.BrowserWindow.fromWebContents(event.sender)?.webContents;
-              contents?.send("nebula:data", { sessionId, data: data.toString("utf8") });
+              bufferData(data.toString("utf8"));
             });
 
             stream.stderr?.on("data", (data) => {
-              const contents = electronModule.BrowserWindow.fromWebContents(event.sender)?.webContents;
-              contents?.send("nebula:data", { sessionId, data: data.toString("utf8") });
+              bufferData(data.toString("utf8"));
             });
 
             stream.on("close", () => {
+              // Flush any remaining data before close
+              if (flushTimeout) {
+                clearTimeout(flushTimeout);
+              }
+              flushBuffer();
               const contents = electronModule.BrowserWindow.fromWebContents(event.sender)?.webContents;
               contents?.send("nebula:exit", { sessionId, exitCode: 0 });
               sessions.delete(sessionId);

@@ -225,7 +225,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           fontSize,
           fontFamily:
             '"JetBrains Mono", "Cascadia Code", "Fira Code", "SF Mono", "Menlo", "DejaVu Sans Mono", monospace',
-          scrollback: 5000, // Reduced from default 10000 for better performance
+          scrollback: 3000, // Reduced scrollback for faster rendering
           smoothScrollDuration: 0, // Disable smooth scrolling to reduce render overhead
           theme: {
             ...terminalTheme.colors,

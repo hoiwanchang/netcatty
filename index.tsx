@@ -1,5 +1,11 @@
+import { init as initGhostty } from 'ghostty-web';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+
+// Pre-load Ghostty WASM immediately on app start for faster terminal open
+initGhostty().catch((err) => {
+  console.warn('[Ghostty] WASM preload failed, will retry on terminal open:', err);
+});
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
