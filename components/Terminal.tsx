@@ -806,12 +806,12 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
-    
+
     const onSelectionChange = () => {
       const selection = term.getSelection();
       setHasSelection(!!selection && selection.length > 0);
     };
-    
+
     term.onSelectionChange(onSelectionChange);
     // No need to return cleanup as xterm handles it when disposed
   }, []);
@@ -1539,59 +1539,59 @@ const TerminalComponent: React.FC<TerminalProps> = ({
             </div>
           )}
 
-        {/* Known Host Verification Dialog */}
-        {needsHostKeyVerification && pendingHostKeyInfo && (
-          <div className="absolute inset-0 z-30 bg-background">
-            <KnownHostConfirmDialog
-              host={host}
-              hostKeyInfo={pendingHostKeyInfo}
-              onClose={handleHostKeyClose}
-              onContinue={handleHostKeyContinue}
-              onAddAndContinue={handleHostKeyAddAndContinue}
-            />
-          </div>
-        )}
+          {/* Known Host Verification Dialog */}
+          {needsHostKeyVerification && pendingHostKeyInfo && (
+            <div className="absolute inset-0 z-30 bg-background">
+              <KnownHostConfirmDialog
+                host={host}
+                hostKeyInfo={pendingHostKeyInfo}
+                onClose={handleHostKeyClose}
+                onContinue={handleHostKeyContinue}
+                onAddAndContinue={handleHostKeyAddAndContinue}
+              />
+            </div>
+          )}
 
-        {status !== "connected" && !needsHostKeyVerification && (
-          <TerminalConnectionDialog
-            host={host}
-            status={status}
-            error={error}
-            progressValue={progressValue}
-            chainProgress={chainProgress}
-            needsAuth={needsAuth}
-            showLogs={showLogs}
-            _setShowLogs={setShowLogs}
-            keys={keys}
-            authProps={{
-              authMethod,
-              setAuthMethod,
-              authUsername,
-              setAuthUsername,
-              authPassword,
-              setAuthPassword,
-              authKeyId,
-              setAuthKeyId,
-              showAuthPassword,
-              setShowAuthPassword,
-              authRetryMessage,
-              onSubmit: handleAuthSubmit,
-              onSubmitWithoutSave: () => {
-                setSaveCredentials(false);
-                handleAuthSubmit();
-              },
-              onCancel: handleCancelConnect,
-              isValid: isAuthValid(),
-            }}
-            progressProps={{
-              timeLeft,
-              isCancelling,
-              progressLogs,
-              onCancel: handleCancelConnect,
-              onRetry: handleRetry,
-            }}
-          />
-        )}
+          {status !== "connected" && !needsHostKeyVerification && (
+            <TerminalConnectionDialog
+              host={host}
+              status={status}
+              error={error}
+              progressValue={progressValue}
+              chainProgress={chainProgress}
+              needsAuth={needsAuth}
+              showLogs={showLogs}
+              _setShowLogs={setShowLogs}
+              keys={keys}
+              authProps={{
+                authMethod,
+                setAuthMethod,
+                authUsername,
+                setAuthUsername,
+                authPassword,
+                setAuthPassword,
+                authKeyId,
+                setAuthKeyId,
+                showAuthPassword,
+                setShowAuthPassword,
+                authRetryMessage,
+                onSubmit: handleAuthSubmit,
+                onSubmitWithoutSave: () => {
+                  setSaveCredentials(false);
+                  handleAuthSubmit();
+                },
+                onCancel: handleCancelConnect,
+                isValid: isAuthValid(),
+              }}
+              progressProps={{
+                timeLeft,
+                isCancelling,
+                progressLogs,
+                onCancel: handleCancelConnect,
+                onRetry: handleRetry,
+              }}
+            />
+          )}
         </div>
 
         {/* SFTP Modal - rendered outside terminal container to avoid affecting terminal width */}
