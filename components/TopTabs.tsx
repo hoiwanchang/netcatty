@@ -1,10 +1,14 @@
-﻿import { Bell,Copy,Folder,LayoutGrid,Minus,Moon,MoreHorizontal,Plus,Shield,Square,Sun,TerminalSquare,User,X } from 'lucide-react';
-import React,{ memo,useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState } from 'react';
-import { activeTabStore,useActiveTabId } from '../application/state/activeTabStore';
+﻿import { Bell, Copy, Folder, LayoutGrid, Minus, Moon, MoreHorizontal, Plus, Shield, Square, Sun, TerminalSquare, User, X } from 'lucide-react';
+import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { activeTabStore, useActiveTabId } from '../application/state/activeTabStore';
 import { cn } from '../lib/utils';
-import { TerminalSession,Workspace } from '../types';
+import { TerminalSession, Workspace } from '../types';
 import { Button } from './ui/button';
-import { ContextMenu,ContextMenuContent,ContextMenuItem,ContextMenuTrigger } from './ui/context-menu';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from './ui/context-menu';
+
+// Helper styles for Electron drag regions (use type assertion to include non-standard WebkitAppRegion)
+const dragRegionStyle = { WebkitAppRegion: 'drag' } as React.CSSProperties;
+const dragRegionNoSelect = { WebkitAppRegion: 'drag', userSelect: 'none' } as React.CSSProperties;
 
 interface TopTabsProps {
   theme: 'dark' | 'light';
@@ -434,14 +438,14 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
   return (
     <div 
       className="relative w-full bg-secondary border-b border-border/60 app-drag"
-      style={{ WebkitAppRegion: 'drag', userSelect: 'none' }}
+      style={dragRegionNoSelect}
       onDoubleClick={handleTitleBarDoubleClick}
     >
       {/* Always-on drag stripe so the window can be moved even when tabs fill the bar */}
-      <div className="absolute inset-x-0 top-0 h-3 app-drag pointer-events-auto z-10" style={{ WebkitAppRegion: 'drag' }} aria-hidden />
+      <div className="absolute inset-x-0 top-0 h-3 app-drag pointer-events-auto z-10" style={dragRegionStyle} aria-hidden />
       <div
         className="h-10 px-3 flex items-center gap-2 app-drag"
-        style={{ paddingLeft: isMacClient ? 76 : 12, WebkitAppRegion: 'drag' }}
+        style={{ ...dragRegionStyle, paddingLeft: isMacClient ? 76 : 12 }}
       >
         {/* Fixed left tabs: Vaults and SFTP */}
         <div className="flex items-center gap-2 flex-shrink-0 app-drag">
@@ -466,7 +470,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
         </div>
 
         {/* Scrollable tabs container with fade masks */}
-        <div className="relative min-w-0 flex-1 app-drag" style={{ WebkitAppRegion: 'drag' }}>
+        <div className="relative min-w-0 flex-1 app-drag" style={dragRegionStyle}>
           {/* Left fade mask */}
           {canScrollLeft && (
             <div
@@ -521,7 +525,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
         )}
 
         {/* Fixed right controls */}
-        <div className="flex-shrink-0 flex items-center gap-2 app-drag" style={{ WebkitAppRegion: 'drag' }}>
+        <div className="flex-shrink-0 flex items-center gap-2 app-drag" style={dragRegionStyle}>
           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground app-no-drag">
             <Bell size={16} />
           </Button>
