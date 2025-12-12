@@ -339,22 +339,22 @@ echo $3 >> "$FILE"`);
         throw new Error(result.error || "Failed to generate key pair");
       }
 
-        const newKey: SSHKey = {
-          id: crypto.randomUUID(),
-          label: draftKey.label.trim(),
-          type: keyType,
-          keySize: keyType !== "ED25519" ? keySize : undefined,
-          privateKey: result.privateKey,
-          publicKey: result.publicKey,
-          passphrase: draftKey.passphrase,
-          savePassphrase: draftKey.savePassphrase,
-          source: "generated",
-          category: "key",
-          created: Date.now(),
-        };
+      const newKey: SSHKey = {
+        id: crypto.randomUUID(),
+        label: draftKey.label.trim(),
+        type: keyType,
+        keySize: keyType !== "ED25519" ? keySize : undefined,
+        privateKey: result.privateKey,
+        publicKey: result.publicKey,
+        passphrase: draftKey.passphrase,
+        savePassphrase: draftKey.savePassphrase,
+        source: "generated",
+        category: "key",
+        created: Date.now(),
+      };
 
-        onSave(newKey);
-        closePanel();
+      onSave(newKey);
+      closePanel();
     } catch (err) {
       showError(err instanceof Error ? err.message : "Failed to generate key", "Key Generation");
     } finally {
@@ -1205,7 +1205,7 @@ echo $3 >> "$FILE"`);
                       // Get private key for authentication if host uses key auth
                       const hostPrivateKey = exportHost.identityFileId
                         ? keys.find((k) => k.id === exportHost.identityFileId)
-                            ?.privateKey
+                          ?.privateKey
                         : undefined;
 
                       // Escape the public key for shell (single quotes, escape existing quotes)
