@@ -478,6 +478,38 @@ function registerHandlers(ipcMain) {
   ipcMain.on("netcatty:close", closeSession);
 }
 
+/**
+ * Cleanup all sessions - call before app quit
+ */
+function cleanupAllSessions() {
+  console.log(`[Terminal] Cleaning up ${sessions.size} sessions before quit`);
+  for (const [sessionId, session] of sessions) {
+    try {
+      if (session.stream) {
+        session.stream.close();
+        session.conn?.end();
+      } else if (session.proc) {
+        // For node-pty on Windows, we need to kill more gracefully
+        try {
+          session.proc.kill();
+        } catch (e) {
+          // Ignore errors during cleanup
+        }
+      } else if (session.socket) {
+        session.socket.destroy();
+      }
+      if (session.chainConnections) {
+        for (const c of session.chainConnections) {
+          try { c.end(); } catch {}
+        }
+      }
+    } catch (err) {
+      // Ignore cleanup errors
+    }
+  }
+  sessions.clear();
+}
+
 module.exports = {
   init,
   registerHandlers,
@@ -488,4 +520,5 @@ module.exports = {
   writeToSession,
   resizeSession,
   closeSession,
+  cleanupAllSessions,
 };

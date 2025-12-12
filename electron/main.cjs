@@ -227,6 +227,15 @@ app.on("window-all-closed", () => {
   }
 });
 
+// Cleanup all PTY sessions before quitting to prevent node-pty assertion errors
+app.on("will-quit", () => {
+  try {
+    terminalBridge.cleanupAllSessions();
+  } catch (err) {
+    console.warn("Error during terminal cleanup:", err);
+  }
+});
+
 // Export for testing
 module.exports = {
   sessions,
