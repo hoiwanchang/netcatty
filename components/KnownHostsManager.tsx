@@ -1,4 +1,4 @@
-﻿import {
+import {
   ArrowRight,
   ChevronDown,
   Clock,
@@ -21,6 +21,8 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { useKnownHostsBackend } from "../application/state/useKnownHostsBackend";
+import { logger } from "../lib/logger";
 import { cn } from "../lib/utils";
 import { Host, KnownHost } from "../types";
 import { Button } from "./ui/button";
@@ -104,7 +106,7 @@ const parseKnownHostsFile = (content: string): KnownHost[] => {
         discoveredAt: Date.now(),
       });
     } catch {
-      console.warn("Failed to parse known_hosts line:", line);
+      logger.warn("Failed to parse known_hosts line:", line);
     }
   }
 
@@ -259,13 +261,7 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
   onImportFromFile,
   onRefresh,
 }) => {
-  // Debug: track renders
-  const renderCountRef = React.useRef(0);
-  renderCountRef.current++;
-  console.log(
-    `[KnownHostsManager] render #${renderCountRef.current} - knownHosts: ${knownHosts.length}, hosts: ${hosts.length}`,
-  );
-
+  const { readKnownHosts } = useKnownHostsBackend();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [isScanning, setIsScanning] = useState(false);
@@ -278,31 +274,28 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
   // Define handleScanSystem before useEffect that depends on it
   const handleScanSystem = useCallback(async () => {
     setIsScanning(true);
-    // Try to read from common known_hosts locations via Electron
-    if (window.netcatty?.readKnownHosts) {
-      try {
-        const content = await window.netcatty.readKnownHosts();
-        if (content) {
-          const parsed = parseKnownHostsFile(content);
-          const existingHostnames = new Set(
-            knownHosts.map((h) => `${h.hostname}:${h.port}`),
-          );
-          const newHosts = parsed.filter(
-            (h) => !existingHostnames.has(`${h.hostname}:${h.port}`),
-          );
+    try {
+      const content = await readKnownHosts();
+      if (content) {
+        const parsed = parseKnownHostsFile(content);
+        const existingHostnames = new Set(
+          knownHosts.map((h) => `${h.hostname}:${h.port}`),
+        );
+        const newHosts = parsed.filter(
+          (h) => !existingHostnames.has(`${h.hostname}:${h.port}`),
+        );
 
-          // Directly import new hosts without dialog
-          if (newHosts.length > 0) {
-            onImportFromFile(newHosts);
-          }
+        // Directly import new hosts without dialog
+        if (newHosts.length > 0) {
+          onImportFromFile(newHosts);
         }
-      } catch (err) {
-        console.error("Failed to scan system known_hosts:", err);
       }
+    } catch (err) {
+      logger.error("Failed to scan system known_hosts:", err);
     }
     onRefresh();
     setIsScanning(false);
-  }, [knownHosts, onRefresh, onImportFromFile]);
+  }, [knownHosts, onRefresh, onImportFromFile, readKnownHosts]);
 
   // Auto-scan on first mount
   useEffect(() => {
@@ -423,10 +416,6 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
 
   // Memoize the rendered list to prevent re-renders
   const renderedItems = useMemo(() => {
-    console.log(
-      "[KnownHostsManager] renderedItems useMemo recalculated - displayedHosts:",
-      displayedHosts.length,
-    );
     return displayedHosts.map((knownHost) => (
       <HostItem
         key={knownHost.id}
@@ -444,8 +433,6 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
     handleDelete,
     handleConvertToHost,
   ]);
-
-  console.log("[KnownHostsManager] about to return JSX");
 
   return (
     <div className="h-full flex flex-col">

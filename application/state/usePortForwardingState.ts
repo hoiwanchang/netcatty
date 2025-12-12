@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
-import { PortForwardingRule } from "../../domain/models";
-import { STORAGE_KEY_PORT_FORWARDING } from "../../infrastructure/config/storageKeys";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Host, PortForwardingRule } from "../../domain/models";
+import {
+  STORAGE_KEY_PF_PREFER_FORM_MODE,
+  STORAGE_KEY_PORT_FORWARDING,
+} from "../../infrastructure/config/storageKeys";
 import { localStorageAdapter } from "../../infrastructure/persistence/localStorageAdapter";
 import {
   getActiveConnection,
   getActiveRuleIds,
+  startPortForward,
+  stopPortForward,
 } from "../../infrastructure/services/portForwardingService";
 
 export type ViewMode = "grid" | "list";
@@ -16,11 +21,13 @@ export interface UsePortForwardingStateResult {
   viewMode: ViewMode;
   sortMode: SortMode;
   search: string;
+  preferFormMode: boolean;
 
   setSelectedRuleId: (id: string | null) => void;
   setViewMode: (mode: ViewMode) => void;
   setSortMode: (mode: SortMode) => void;
   setSearch: (query: string) => void;
+  setPreferFormMode: (prefer: boolean) => void;
 
   addRule: (
     rule: Omit<PortForwardingRule, "id" | "createdAt" | "status">,
@@ -35,6 +42,17 @@ export interface UsePortForwardingStateResult {
     error?: string,
   ) => void;
 
+  startTunnel: (
+    rule: PortForwardingRule,
+    host: Host,
+    keys: { id: string; privateKey: string }[],
+    onStatusChange?: (status: PortForwardingRule["status"], error?: string) => void,
+  ) => Promise<{ success: boolean; error?: string }>;
+  stopTunnel: (
+    ruleId: string,
+    onStatusChange?: (status: PortForwardingRule["status"]) => void,
+  ) => Promise<{ success: boolean; error?: string }>;
+
   filteredRules: PortForwardingRule[];
   selectedRule: PortForwardingRule | undefined;
 }
@@ -45,6 +63,14 @@ export const usePortForwardingState = (): UsePortForwardingStateResult => {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
   const [search, setSearch] = useState("");
+  const [preferFormMode, setPreferFormModeState] = useState<boolean>(() => {
+    return localStorageAdapter.readBoolean(STORAGE_KEY_PF_PREFER_FORM_MODE) ?? false;
+  });
+
+  const setPreferFormMode = useCallback((prefer: boolean) => {
+    setPreferFormModeState(prefer);
+    localStorageAdapter.writeBoolean(STORAGE_KEY_PF_PREFER_FORM_MODE, prefer);
+  }, []);
 
   // Load rules from storage on mount
   useEffect(() => {
@@ -163,8 +189,39 @@ export const usePortForwardingState = (): UsePortForwardingStateResult => {
     [persistRules],
   );
 
+  const startTunnel = useCallback(
+    async (
+      rule: PortForwardingRule,
+      host: Host,
+      keys: { id: string; privateKey: string }[],
+      onStatusChange?: (
+        status: PortForwardingRule["status"],
+        error?: string,
+      ) => void,
+    ) => {
+      return startPortForward(rule, host, keys, (status, error) => {
+        setRuleStatus(rule.id, status, error);
+        onStatusChange?.(status, error ?? undefined);
+      });
+    },
+    [setRuleStatus],
+  );
+
+  const stopTunnel = useCallback(
+    async (
+      ruleId: string,
+      onStatusChange?: (status: PortForwardingRule["status"]) => void,
+    ) => {
+      return stopPortForward(ruleId, (status) => {
+        setRuleStatus(ruleId, status);
+        onStatusChange?.(status);
+      });
+    },
+    [setRuleStatus],
+  );
+
   // Filter and sort rules
-  const filteredRules = useCallback(() => {
+  const filteredRules = useMemo(() => {
     let result = [...rules];
 
     // Filter by search
@@ -197,7 +254,7 @@ export const usePortForwardingState = (): UsePortForwardingStateResult => {
     }
 
     return result;
-  }, [rules, search, sortMode])();
+  }, [rules, search, sortMode]);
 
   const selectedRule = rules.find((r) => r.id === selectedRuleId);
 
@@ -207,11 +264,13 @@ export const usePortForwardingState = (): UsePortForwardingStateResult => {
     viewMode,
     sortMode,
     search,
+    preferFormMode,
 
     setSelectedRuleId,
     setViewMode,
     setSortMode,
     setSearch,
+    setPreferFormMode,
 
     addRule,
     updateRule,
@@ -219,6 +278,8 @@ export const usePortForwardingState = (): UsePortForwardingStateResult => {
     duplicateRule,
 
     setRuleStatus,
+    startTunnel,
+    stopTunnel,
 
     filteredRules,
     selectedRule,

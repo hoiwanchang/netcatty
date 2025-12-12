@@ -1,10 +1,12 @@
-﻿/**
+/**
  * Port Forwarding Service
  * Handles communication between the frontend and the Electron backend
  * for establishing and managing SSH port forwarding tunnels.
  */
 
 import { Host,PortForwardingRule } from '../../domain/models';
+import { logger } from '../../lib/logger';
+import { netcattyBridge } from './netcattyBridge';
 
 export interface PortForwardingConnection {
   ruleId: string;
@@ -42,11 +44,11 @@ export const startPortForward = async (
   keys: { id: string; privateKey: string }[],
   onStatusChange: (status: PortForwardingRule['status'], error?: string) => void
 ): Promise<{ success: boolean; error?: string }> => {
-  const bridge = window.netcatty;
+  const bridge = netcattyBridge.get();
   
   if (!bridge?.startPortForward) {
     // Fallback for browser/dev mode - simulate the connection
-    console.warn('[PortForwardingService] Backend not available, simulating connection...');
+    logger.warn('[PortForwardingService] Backend not available, simulating connection...');
     return simulateConnection(rule, onStatusChange);
   }
   
@@ -122,7 +124,7 @@ export const stopPortForward = async (
   ruleId: string,
   onStatusChange: (status: PortForwardingRule['status']) => void
 ): Promise<{ success: boolean; error?: string }> => {
-  const bridge = window.netcatty;
+  const bridge = netcattyBridge.get();
   const conn = activeConnections.get(ruleId);
   
   if (!conn) {
@@ -132,7 +134,7 @@ export const stopPortForward = async (
   
   if (!bridge?.stopPortForward) {
     // Fallback for browser/dev mode
-    console.warn('[PortForwardingService] Backend not available, simulating stop...');
+    logger.warn('[PortForwardingService] Backend not available, simulating stop...');
     conn.unsubscribe?.();
     activeConnections.delete(ruleId);
     onStatusChange('inactive');
@@ -169,25 +171,25 @@ export const getPortForwardStatus = async (
  * Check if backend is available
  */
 export const isBackendAvailable = (): boolean => {
-  return !!(window.netcatty?.startPortForward);
+  return !!(netcattyBridge.get()?.startPortForward);
 };
 
 /**
  * Stop all active tunnels (cleanup on unmount)
  */
 export const stopAllPortForwards = async (): Promise<void> => {
-  const bridge = window.netcatty;
+  const bridge = netcattyBridge.get();
   
   for (const [_ruleId, conn] of activeConnections) {
-    try {
-      if (bridge?.stopPortForward) {
-        await bridge.stopPortForward(conn.tunnelId);
-      }
-      conn.unsubscribe?.();
-    } catch (err) {
-      console.warn(`[PortForwardingService] Failed to stop tunnel ${conn.tunnelId}:`, err);
-    }
-  }
+	    try {
+	      if (bridge?.stopPortForward) {
+	        await bridge.stopPortForward(conn.tunnelId);
+	      }
+	      conn.unsubscribe?.();
+	    } catch (err) {
+	      logger.warn(`[PortForwardingService] Failed to stop tunnel ${conn.tunnelId}:`, err);
+	    }
+	  }
   
   activeConnections.clear();
 };

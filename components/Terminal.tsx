@@ -7,6 +7,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { Maximize2 } from "lucide-react";
 import React, { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { logger } from "../lib/logger";
 import { cn } from "../lib/utils";
 import {
   Host,
@@ -19,6 +20,7 @@ import {
   KeyBinding,
 } from "../types";
 import { checkAppShortcut, getAppLevelActions, getTerminalPassthroughActions } from "../application/state/useGlobalHotkeys";
+import { useTerminalBackend } from "../application/state/useTerminalBackend";
 import KnownHostConfirmDialog, { HostKeyInfo } from "./KnownHostConfirmDialog";
 import SFTPModal from "./SFTPModal";
 import { Button } from "./ui/button";
@@ -147,6 +149,9 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   keyBindingsRef.current = keyBindings;
   onHotkeyActionRef.current = onHotkeyAction;
 
+  const terminalBackend = useTerminalBackend();
+  const { resizeSession } = terminalBackend;
+
   const [isScriptsOpen, setIsScriptsOpen] = useState(false);
   const [status, setStatus] = useState<TerminalSession["status"]>("connecting");
   const [error, setError] = useState<string | null>(null);
@@ -221,11 +226,11 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     disposeExitRef.current?.();
     disposeExitRef.current = null;
 
-    if (sessionRef.current && window.netcatty?.closeSession) {
+    if (sessionRef.current) {
       try {
-        window.netcatty.closeSession(sessionRef.current);
+        terminalBackend.closeSession(sessionRef.current);
       } catch (err) {
-        console.warn("Failed to close SSH session", err);
+        logger.warn("Failed to close SSH session", err);
       }
     }
     sessionRef.current = null;
@@ -244,9 +249,9 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   };
 
   const runDistroDetection = async (key?: SSHKey) => {
-    if (!window.netcatty?.execCommand) return;
+    if (!terminalBackend.execAvailable()) return;
     try {
-      const res = await window.netcatty.execCommand({
+      const res = await terminalBackend.execCommand({
         hostname: host.hostname,
         username: host.username || "root",
         port: host.port || 22,
@@ -261,10 +266,10 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         ? idMatch[1].replace(/"/g, "")
         : (data.split(/\\s+/)[0] || "").toLowerCase();
       if (distro) onOsDetected?.(host.id, distro);
-    } catch (err) {
-      console.warn("OS probe failed", err);
-    }
-  };
+	    } catch (err) {
+	      logger.warn("OS probe failed", err);
+	    }
+	  };
 
   useEffect(() => {
     let disposed = false;
@@ -390,7 +395,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
                 ? "canvas"
                 : rendererName
             : "unknown";
-          console.info(`[XTerm] renderer=${normalized}`);
+          logger.info(`[XTerm] renderer=${normalized}`);
           const scopedWindow = window as Window & { __xtermRenderer?: string };
           scopedWindow.__xtermRenderer = normalized;
           if (normalized === "unknown" && attempt < 3) {
@@ -440,20 +445,22 @@ const TerminalComponent: React.FC<TerminalProps> = ({
                 }
               })();
               webglAddon.onContextLoss(() => {
-                console.warn("[XTerm] WebGL context loss detected, disposing addon");
+                logger.warn("[XTerm] WebGL context loss detected, disposing addon");
                 webglAddon.dispose();
               });
               term.loadAddon(webglAddon);
               webglLoaded = true;
             } catch (webglErr) {
-              console.warn(
+              logger.warn(
                 "[XTerm] WebGL addon failed, using canvas renderer. Error:",
                 webglErr instanceof Error ? webglErr.message : webglErr,
               );
               // Canvas renderer will be used as fallback - it's actually faster on some Macs
             }
           } else {
-            console.info("[XTerm] Skipping WebGL addon (canvas preferred for macOS profile or low-memory devices)");
+            logger.info(
+              "[XTerm] Skipping WebGL addon (canvas preferred for macOS profile or low-memory devices)",
+            );
           }
 
           // Store whether WebGL was successfully loaded for diagnostics
@@ -481,8 +488,8 @@ const TerminalComponent: React.FC<TerminalProps> = ({
             }
             if (shouldOpen) {
               // Open URL in default browser
-              if (window.netcatty?.openExternal) {
-                window.netcatty.openExternal(uri);
+              if (terminalBackend.openExternalAvailable()) {
+                void terminalBackend.openExternal(uri);
               } else {
                 window.open(uri, '_blank');
               }
@@ -518,28 +525,14 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 
             const isMac = currentScheme === 'mac';
 
-            // Debug: log arrow key combinations
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && (e.ctrlKey || e.metaKey)) {
-              console.log('[Terminal] Arrow key combo detected:', {
-                key: e.key,
-                ctrlKey: e.ctrlKey,
-                altKey: e.altKey,
-                metaKey: e.metaKey,
-                scheme: currentScheme,
-                bindingsCount: currentBindings.length,
-              });
-            }
-
             // Check if this matches any of our shortcuts
             const matched = checkAppShortcut(e, currentBindings, isMac);
             if (!matched) return true; // Let xterm handle it
 
-            console.log('[Terminal] Matched hotkey:', matched.action);
             const { action } = matched;
 
             // App-level actions: call the callback directly and prevent xterm from handling
             if (appLevelActions.has(action)) {
-              console.log('[Terminal] Executing app-level action:', action);
               e.preventDefault();
               if (hotkeyCallback) {
                 hotkeyCallback(action, e);
@@ -561,9 +554,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
                 case 'paste': {
                   navigator.clipboard.readText().then((text) => {
                     const id = sessionRef.current;
-                    if (id && window.netcatty?.writeToSession) {
-                      window.netcatty.writeToSession(id, text);
-                    }
+                    if (id) terminalBackend.writeToSession(id, text);
                   });
                   break;
                 }
@@ -593,16 +584,16 @@ const TerminalComponent: React.FC<TerminalProps> = ({
             const handleMiddleClick = async (e: MouseEvent) => {
               if (e.button === 1) { // Middle mouse button
                 e.preventDefault();
-                try {
-                  const text = await navigator.clipboard.readText();
-                  if (text && sessionRef.current && window.netcatty?.writeToSession) {
-                    window.netcatty.writeToSession(sessionRef.current, text);
-                  }
-                } catch (err) {
-                  console.warn('[Terminal] Failed to paste from clipboard:', err);
-                }
-              }
-            };
+	                  try {
+	                    const text = await navigator.clipboard.readText();
+	                  if (text && sessionRef.current) {
+	                    terminalBackend.writeToSession(sessionRef.current, text);
+	                  }
+		                } catch (err) {
+		                  logger.warn('[Terminal] Failed to paste from clipboard:', err);
+		                }
+	              }
+	            };
             containerRef.current.addEventListener('auxclick', handleMiddleClick);
             // Store cleanup function
             const container = containerRef.current;
@@ -617,15 +608,15 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 
           fitAddon.fit();
           term.focus();
-        } catch (openErr) {
-          console.error("[XTerm] Failed to open terminal:", openErr);
-          throw openErr;
-        }
+	        } catch (openErr) {
+	          logger.error("[XTerm] Failed to open terminal:", openErr);
+	          throw openErr;
+	        }
 
-        term.onData((data) => {
-          const id = sessionRef.current;
-          if (id && window.netcatty?.writeToSession) {
-            window.netcatty.writeToSession(id, data);
+	        term.onData((data) => {
+	          const id = sessionRef.current;
+	          if (id) {
+	            terminalBackend.writeToSession(id, data);
 
             // Track command input for shell history
             if (status === "connected" && onCommandExecuted) {
@@ -663,19 +654,19 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         // Add debouncing for resize events to prevent excessive calls on macOS
         let resizeTimeout: NodeJS.Timeout | null = null;
         const resizeDebounceMs = XTERM_PERFORMANCE_CONFIG.resize.debounceMs;
-        term.onResize(({ cols, rows }) => {
-          const id = sessionRef.current;
-          if (id && window.netcatty?.resizeSession) {
-            // Debounce resize to prevent rapid successive calls
-            if (resizeTimeout) {
-              clearTimeout(resizeTimeout);
-            }
-            resizeTimeout = setTimeout(() => {
-              window.netcatty.resizeSession(id, cols, rows);
-              resizeTimeout = null;
-            }, resizeDebounceMs); // Debounce for smooth resizing on macOS
-          }
-        });
+	        term.onResize(({ cols, rows }) => {
+	          const id = sessionRef.current;
+	          if (id) {
+	            // Debounce resize to prevent rapid successive calls
+	            if (resizeTimeout) {
+	              clearTimeout(resizeTimeout);
+	            }
+	            resizeTimeout = setTimeout(() => {
+	              terminalBackend.resizeSession(id, cols, rows);
+	              resizeTimeout = null;
+	            }, resizeDebounceMs); // Debounce for smooth resizing on macOS
+	          }
+	        });
 
         if (host.protocol === "local" || host.hostname === "localhost") {
           setStatus("connecting");
@@ -709,7 +700,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           await startSSH(term);
         }
       } catch (err) {
-        console.error("Failed to initialize terminal", err);
+        logger.error("Failed to initialize terminal", err);
         setError(err instanceof Error ? err.message : String(err));
         updateStatus("disconnected");
       }
@@ -784,7 +775,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       try {
         fitAddon.fit();
       } catch (err) {
-        console.warn("Fit failed", err);
+        logger.warn("Fit failed", err);
       }
     };
 
@@ -889,33 +880,33 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         try {
           term?.renderer?.remeasureFont?.();
         } catch (err) {
-          console.warn("Font remeasure failed", err);
+          logger.warn("Font remeasure failed", err);
         }
 
-        try {
-          fitAddon?.fit();
-        } catch (err) {
-          console.warn("Fit after fonts ready failed", err);
-        }
+	        try {
+	          fitAddon?.fit();
+		        } catch (err) {
+		          logger.warn("Fit after fonts ready failed", err);
+		        }
 
-        const id = sessionRef.current;
-        if (id && term && window.netcatty?.resizeSession) {
-          try {
-            window.netcatty.resizeSession(id, term.cols, term.rows);
-          } catch (err) {
-            console.warn("Resize session after fonts ready failed", err);
-          }
-        }
-      } catch (err) {
-        console.warn("Waiting for fonts failed", err);
-      }
-    };
+	        const id = sessionRef.current;
+	        if (id && term) {
+	          try {
+	            resizeSession(id, term.cols, term.rows);
+		          } catch (err) {
+		            logger.warn("Resize session after fonts ready failed", err);
+		          }
+		        }
+		      } catch (err) {
+		        logger.warn("Waiting for fonts failed", err);
+		      }
+	    };
 
     waitForFonts();
-    return () => {
-      cancelled = true;
-    };
-  }, [host.id, sessionId]);
+	    return () => {
+	      cancelled = true;
+	    };
+	  }, [host.id, sessionId, resizeSession]);
 
   // Debounced fit for resize operations - only fit when not actively resizing
   useEffect(() => {
@@ -987,7 +978,6 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       // Small delay to ensure state updates complete
       const timer = setTimeout(() => {
         termRef.current?.focus();
-        console.log('[Terminal] Focus triggered via isFocused prop, sessionId:', sessionId.slice(0, 8));
       }, 10);
       return () => clearTimeout(timer);
     }
@@ -1006,7 +996,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       // Copy on select if enabled
       if (hasText && terminalSettings?.copyOnSelect) {
         navigator.clipboard.writeText(selection).catch(err => {
-          console.warn('Copy on select failed:', err);
+          logger.warn('Copy on select failed:', err);
         });
       }
     };
@@ -1040,10 +1030,10 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     try {
       term.clear?.();
     } catch (err) {
-      console.warn("Failed to clear terminal before connect", err);
+      logger.warn("Failed to clear terminal before connect", err);
     }
 
-    if (!window.netcatty?.startSSHSession) {
+    if (!terminalBackend.backendAvailable()) {
       setError("Native SSH bridge unavailable. Launch via Electron app.");
       term.writeln(
         "\r\n[netcatty SSH bridge unavailable. Please run the desktop build to connect.]",
@@ -1106,8 +1096,8 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       ]);
 
       // Subscribe to chain progress events from IPC
-      if (window.netcatty?.onChainProgress) {
-        unsubscribeChainProgress = window.netcatty.onChainProgress(
+      {
+        const unsub = terminalBackend.onChainProgress(
           (hop, total, label, status) => {
             setChainProgress({
               currentHop: hop,
@@ -1123,6 +1113,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
             setProgressValue(Math.min(95, hopProgress));
           },
         );
+        if (unsub) unsubscribeChainProgress = unsub;
       }
     }
 
@@ -1139,7 +1130,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         }
       }
 
-      const id = await window.netcatty.startSSHSession({
+      const id = await terminalBackend.startSSHSession({
         sessionId,
         hostname: host.hostname,
         username: effectiveUsername,
@@ -1165,7 +1156,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 
       sessionRef.current = id;
 
-      disposeDataRef.current = window.netcatty.onSessionData(id, (chunk) => {
+      disposeDataRef.current = terminalBackend.onSessionData(id, (chunk) => {
         // Apply keyword highlighting before writing to terminal
         term.write(highlightProcessorRef.current(chunk));
         if (!hasConnectedRef.current) {
@@ -1177,22 +1168,18 @@ const TerminalComponent: React.FC<TerminalProps> = ({
               try {
                 fitAddonRef.current.fit();
                 // Send updated size to remote
-                if (sessionRef.current && window.netcatty?.resizeSession) {
-                  window.netcatty.resizeSession(
-                    sessionRef.current,
-                    term.cols,
-                    term.rows,
-                  );
+                if (sessionRef.current) {
+                  terminalBackend.resizeSession(sessionRef.current, term.cols, term.rows);
                 }
               } catch (err) {
-                console.warn("Post-connect fit failed", err);
+                logger.warn("Post-connect fit failed", err);
               }
             }
           }, 100);
         }
       });
 
-      disposeExitRef.current = window.netcatty.onSessionExit(id, (evt) => {
+      disposeExitRef.current = terminalBackend.onSessionExit(id, (evt) => {
         updateStatus("disconnected");
         setChainProgress(null); // Clear chain progress on disconnect
         term.writeln(
@@ -1207,10 +1194,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         hasRunStartupCommandRef.current = true;
         setTimeout(() => {
           if (sessionRef.current) {
-            window.netcatty?.writeToSession(
-              sessionRef.current,
-              `${commandToRun}\r`,
-            );
+            terminalBackend.writeToSession(sessionRef.current, `${commandToRun}\r`);
             // Track startup command execution in shell history
             if (onCommandExecuted) {
               onCommandExecuted(commandToRun, host.id, host.label, sessionId);
@@ -1263,11 +1247,10 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     try {
       term.clear?.();
     } catch (err) {
-      console.warn("Failed to clear terminal before connect", err);
+      logger.warn("Failed to clear terminal before connect", err);
     }
 
-    const startTelnetSession = window.netcatty?.startTelnetSession;
-    if (!startTelnetSession) {
+    if (!terminalBackend.telnetAvailable()) {
       setError("Telnet bridge unavailable. Please run the desktop build.");
       term.writeln(
         "\r\n[Telnet bridge unavailable. Please run the desktop build.]",
@@ -1289,7 +1272,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         }
       }
 
-      const id = await startTelnetSession({
+      const id = await terminalBackend.startTelnetSession({
         sessionId,
         hostname: host.hostname,
         port: host.telnetPort || host.port || 23,
@@ -1301,7 +1284,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 
       sessionRef.current = id;
 
-      disposeDataRef.current = window.netcatty?.onSessionData(id, (chunk) => {
+      disposeDataRef.current = terminalBackend.onSessionData(id, (chunk) => {
         // Apply keyword highlighting before writing to terminal
         term.write(highlightProcessorRef.current(chunk));
         if (!hasConnectedRef.current) {
@@ -1310,22 +1293,18 @@ const TerminalComponent: React.FC<TerminalProps> = ({
             if (fitAddonRef.current) {
               try {
                 fitAddonRef.current.fit();
-                if (sessionRef.current && window.netcatty?.resizeSession) {
-                  window.netcatty.resizeSession(
-                    sessionRef.current,
-                    term.cols,
-                    term.rows,
-                  );
+                if (sessionRef.current) {
+                  terminalBackend.resizeSession(sessionRef.current, term.cols, term.rows);
                 }
               } catch (err) {
-                console.warn("Post-connect fit failed", err);
+                logger.warn("Post-connect fit failed", err);
               }
             }
           }, 100);
         }
       });
 
-      disposeExitRef.current = window.netcatty?.onSessionExit(id, (evt) => {
+      disposeExitRef.current = terminalBackend.onSessionExit(id, (evt) => {
         updateStatus("disconnected");
         term.writeln(
           `\r\n[Telnet session closed${evt?.exitCode !== undefined ? ` (code ${evt.exitCode})` : ""}]`,
@@ -1344,11 +1323,10 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     try {
       term.clear?.();
     } catch (err) {
-      console.warn("Failed to clear terminal before connect", err);
+      logger.warn("Failed to clear terminal before connect", err);
     }
 
-    const startMoshSession = window.netcatty?.startMoshSession;
-    if (!startMoshSession) {
+    if (!terminalBackend.moshAvailable()) {
       setError("Mosh bridge unavailable. Please run the desktop build.");
       term.writeln(
         "\r\n[Mosh bridge unavailable. Please run the desktop build.]",
@@ -1370,7 +1348,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         }
       }
 
-      const id = await startMoshSession({
+      const id = await terminalBackend.startMoshSession({
         sessionId,
         hostname: host.hostname,
         username: host.username || "root",
@@ -1385,7 +1363,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 
       sessionRef.current = id;
 
-      disposeDataRef.current = window.netcatty?.onSessionData(id, (chunk) => {
+      disposeDataRef.current = terminalBackend.onSessionData(id, (chunk) => {
         // Apply keyword highlighting before writing to terminal
         term.write(highlightProcessorRef.current(chunk));
         if (!hasConnectedRef.current) {
@@ -1394,22 +1372,18 @@ const TerminalComponent: React.FC<TerminalProps> = ({
             if (fitAddonRef.current) {
               try {
                 fitAddonRef.current.fit();
-                if (sessionRef.current && window.netcatty?.resizeSession) {
-                  window.netcatty.resizeSession(
-                    sessionRef.current,
-                    term.cols,
-                    term.rows,
-                  );
+                if (sessionRef.current) {
+                  terminalBackend.resizeSession(sessionRef.current, term.cols, term.rows);
                 }
               } catch (err) {
-                console.warn("Post-connect fit failed", err);
+                logger.warn("Post-connect fit failed", err);
               }
             }
           }, 100);
         }
       });
 
-      disposeExitRef.current = window.netcatty?.onSessionExit(id, (evt) => {
+      disposeExitRef.current = terminalBackend.onSessionExit(id, (evt) => {
         updateStatus("disconnected");
         term.writeln(
           `\r\n[Mosh session closed${evt?.exitCode !== undefined ? ` (code ${evt.exitCode})` : ""}]`,
@@ -1423,10 +1397,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         hasRunStartupCommandRef.current = true;
         setTimeout(() => {
           if (sessionRef.current) {
-            window.netcatty?.writeToSession(
-              sessionRef.current,
-              `${commandToRun}\r`,
-            );
+            terminalBackend.writeToSession(sessionRef.current, `${commandToRun}\r`);
             if (onCommandExecuted) {
               onCommandExecuted(commandToRun, host.id, host.label, sessionId);
             }
@@ -1445,11 +1416,10 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     try {
       term.clear?.();
     } catch (err) {
-      console.warn("Failed to clear terminal before connect", err);
+      logger.warn("Failed to clear terminal before connect", err);
     }
 
-    const startLocalSession = window.netcatty?.startLocalSession;
-    if (!startLocalSession) {
+    if (!terminalBackend.localAvailable()) {
       setError("Local shell bridge unavailable. Please run the desktop build.");
       term.writeln(
         "\r\n[Local shell bridge unavailable. Please run the desktop build to spawn a local terminal.]",
@@ -1459,7 +1429,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     }
 
     try {
-      const id = await startLocalSession({
+      const id = await terminalBackend.startLocalSession({
         sessionId,
         cols: term.cols,
         rows: term.rows,
@@ -1468,7 +1438,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         },
       });
       sessionRef.current = id;
-      disposeDataRef.current = window.netcatty?.onSessionData(id, (chunk) => {
+      disposeDataRef.current = terminalBackend.onSessionData(id, (chunk) => {
         // Apply keyword highlighting before writing to terminal
         term.write(highlightProcessorRef.current(chunk));
         if (!hasConnectedRef.current) {
@@ -1479,21 +1449,17 @@ const TerminalComponent: React.FC<TerminalProps> = ({
               try {
                 fitAddonRef.current.fit();
                 // Send updated size to remote
-                if (sessionRef.current && window.netcatty?.resizeSession) {
-                  window.netcatty.resizeSession(
-                    sessionRef.current,
-                    term.cols,
-                    term.rows,
-                  );
+                if (sessionRef.current) {
+                  terminalBackend.resizeSession(sessionRef.current, term.cols, term.rows);
                 }
               } catch (err) {
-                console.warn("Post-connect fit failed", err);
+                logger.warn("Post-connect fit failed", err);
               }
             }
           }, 100);
         }
       });
-      disposeExitRef.current = window.netcatty?.onSessionExit(id, (evt) => {
+      disposeExitRef.current = terminalBackend.onSessionExit(id, (evt) => {
         updateStatus("disconnected");
         term.writeln(
           `\r\n[session closed${evt?.exitCode !== undefined ? ` (code ${evt.exitCode})` : ""}]`,
@@ -1509,8 +1475,8 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   };
 
   const handleSnippetClick = (cmd: string) => {
-    if (sessionRef.current && window.netcatty?.writeToSession) {
-      window.netcatty.writeToSession(sessionRef.current, `${cmd}\r`);
+    if (sessionRef.current) {
+      terminalBackend.writeToSession(sessionRef.current, `${cmd}\r`);
       setIsScriptsOpen(false);
       termRef.current?.focus();
       return;
@@ -1631,7 +1597,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       try {
         termRef.current.clear?.();
       } catch (err) {
-        console.warn("Failed to clear terminal", err);
+        logger.warn("Failed to clear terminal", err);
       }
       startSSH(termRef.current);
     }
@@ -1647,18 +1613,16 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     }
   };
 
-  const handleContextPaste = async () => {
-    const term = termRef.current;
-    if (!term) return;
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text && sessionRef.current && window.netcatty?.writeToSession) {
-        window.netcatty.writeToSession(sessionRef.current, text);
-      }
-    } catch (err) {
-      console.warn("Failed to paste from clipboard", err);
-    }
-  };
+	  const handleContextPaste = async () => {
+	    const term = termRef.current;
+	    if (!term) return;
+	    try {
+	      const text = await navigator.clipboard.readText();
+	      if (text && sessionRef.current) terminalBackend.writeToSession(sessionRef.current, text);
+	    } catch (err) {
+	      logger.warn("Failed to paste from clipboard", err);
+	    }
+	  };
 
   const handleContextSelectAll = () => {
     const term = termRef.current;

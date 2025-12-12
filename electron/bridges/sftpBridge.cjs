@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SFTP Bridge - Handles SFTP connections and file operations
  * Extracted from main.cjs for single responsibility
  */

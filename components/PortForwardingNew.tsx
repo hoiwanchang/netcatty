@@ -17,10 +17,6 @@ import {
   PortForwardingType,
   SSHKey,
 } from "../domain/models";
-import {
-  startPortForward,
-  stopPortForward,
-} from "../infrastructure/services/portForwardingService";
 import { cn } from "../lib/utils";
 import SelectHostPanel from "./SelectHostPanel";
 import {
@@ -83,8 +79,12 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
     deleteRule,
     duplicateRule,
     setRuleStatus,
+    startTunnel,
+    stopTunnel,
     filteredRules,
     selectedRule: _selectedRule,
+    preferFormMode,
+    setPreferFormMode,
   } = usePortForwardingState();
 
   // Track connecting/stopping states
@@ -106,12 +106,11 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
       let errorShown = false;
 
       try {
-        const result = await startPortForward(
+        const result = await startTunnel(
           rule,
           _host,
           keys.map((k) => ({ id: k.id, privateKey: k.privateKey })),
           (status, error) => {
-            setRuleStatus(rule.id, status, error);
             // Show toast on error (only once)
             if (status === "error" && error && !errorShown) {
               errorShown = true;
@@ -132,7 +131,7 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
         });
       }
     },
-    [hosts, keys, setRuleStatus],
+    [hosts, keys, setRuleStatus, startTunnel],
   );
 
   // Stop a port forwarding tunnel
@@ -141,9 +140,7 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
       setPendingOperations((prev) => new Set([...prev, rule.id]));
 
       try {
-        await stopPortForward(rule.id, (status) => {
-          setRuleStatus(rule.id, status);
-        });
+        await stopTunnel(rule.id);
       } finally {
         setPendingOperations((prev) => {
           const next = new Set(prev);
@@ -152,7 +149,7 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
         });
       }
     },
-    [setRuleStatus],
+    [stopTunnel],
   );
 
   // Wizard state
@@ -191,15 +188,6 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
       hostId: undefined,
     },
   );
-  // User preference: prefer wizard (false) or form (true)
-  const [preferFormMode, setPreferFormMode] = useState(() => {
-    try {
-      // Default to wizard mode (false) if not set
-      return localStorage.getItem("pf-prefer-form-mode") === "true";
-    } catch {
-      return false;
-    }
-  });
 
   // New forwarding menu
   const [showNewMenu, setShowNewMenu] = useState(false);
@@ -258,11 +246,6 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
   const skipWizardToForm = () => {
     // Save preference
     setPreferFormMode(true);
-    try {
-      localStorage.setItem("pf-prefer-form-mode", "true");
-    } catch {
-      // Ignore localStorage errors (e.g., private browsing mode)
-    }
 
     // Transfer current draft to form
     setNewFormDraft({
@@ -277,11 +260,6 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
   const openWizardFromForm = () => {
     // User opens wizard - prefer wizard mode next time
     setPreferFormMode(false);
-    try {
-      localStorage.setItem("pf-prefer-form-mode", "false");
-    } catch {
-      // Ignore localStorage errors (e.g., private browsing mode)
-    }
 
     // Transfer current form draft to wizard
     setWizardType(newFormDraft.type || "local");

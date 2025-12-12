@@ -36,10 +36,9 @@ export const useSessionState = () => {
       username: 'local',
       status: 'connecting',
     };
-    setSessions(prev => [...prev, newSession]);
-    setActiveTabId(sessionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setActiveTabId is a stable store method reference
-  }, []);
+	    setSessions(prev => [...prev, newSession]);
+	    setActiveTabId(sessionId);
+	  }, [setActiveTabId]);
 
   const connectToHost = useCallback((host: Host) => {
     const newSession: TerminalSession = {
@@ -54,10 +53,9 @@ export const useSessionState = () => {
       port: host.port,
       moshEnabled: host.moshEnabled,
     };
-    setSessions(prev => [...prev, newSession]);
-    setActiveTabId(newSession.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setActiveTabId is a stable store method reference
-  }, []);
+	    setSessions(prev => [...prev, newSession]);
+	    setActiveTabId(newSession.id);
+	  }, [setActiveTabId]);
 
   const updateSessionStatus = useCallback((sessionId: string, status: TerminalSession['status']) => {
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status } : s));
@@ -140,11 +138,10 @@ export const useSessionState = () => {
           }
         }
       }
-      
-      return prevSessions.filter(s => s.id !== sessionId);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setActiveTabId is a stable store method reference
-  }, [workspaces]);
+	      
+	      return prevSessions.filter(s => s.id !== sessionId);
+	    });
+	  }, [workspaces, setActiveTabId]);
 
   const closeWorkspace = useCallback((workspaceId: string) => {
     setWorkspaces(prevWorkspaces => {
@@ -161,10 +158,9 @@ export const useSessionState = () => {
         }
       }
       
-      return remainingWorkspaces;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setActiveTabId is a stable store method reference
-  }, []);
+	      return remainingWorkspaces;
+	    });
+	  }, [setActiveTabId]);
 
   const startWorkspaceRename = useCallback((workspaceId: string) => {
     setWorkspaces(prevWorkspaces => {
@@ -204,7 +200,7 @@ export const useSessionState = () => {
   ) => {
     if (!hint || baseSessionId === joiningSessionId) return;
     
-    setSessions(prevSessions => {
+	    setSessions(prevSessions => {
       const base = prevSessions.find(s => s.id === baseSessionId);
       const joining = prevSessions.find(s => s.id === joiningSessionId);
       if (!base || !joining || base.workspaceId || joining.workspaceId) return prevSessions;
@@ -219,9 +215,8 @@ export const useSessionState = () => {
         }
         return s;
       });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setActiveTabId is a stable store method reference
-  }, []);
+	    });
+	  }, [setActiveTabId]);
 
   const addSessionToWorkspace = useCallback((
     workspaceId: string,
@@ -230,7 +225,7 @@ export const useSessionState = () => {
   ) => {
     if (!hint) return;
     
-    setSessions(prevSessions => {
+	    setSessions(prevSessions => {
       const session = prevSessions.find(s => s.id === sessionId);
       if (!session || session.workspaceId) return prevSessions;
       
@@ -246,9 +241,8 @@ export const useSessionState = () => {
       
       setActiveTabId(workspaceId);
       return prevSessions.map(s => s.id === sessionId ? { ...s, workspaceId } : s);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setActiveTabId is a stable store method reference
-  }, []);
+	    });
+	  }, [setActiveTabId]);
 
   const updateSplitSizes = useCallback((workspaceId: string, splitId: string, sizes: number[]) => {
     setWorkspaces(prev => prev.map(ws => {
@@ -263,7 +257,7 @@ export const useSessionState = () => {
     sessionId: string,
     direction: SplitDirection
   ) => {
-    setSessions(prevSessions => {
+	    setSessions(prevSessions => {
       const session = prevSessions.find(s => s.id === sessionId);
       if (!session) return prevSessions;
       
@@ -328,9 +322,8 @@ export const useSessionState = () => {
         }
         return s;
       }).concat({ ...newSession, workspaceId: newWorkspace.id });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setActiveTabId is a stable store method reference
-  }, []);
+	    });
+	  }, [setActiveTabId]);
 
   // Toggle workspace view mode between split and focus
   const toggleWorkspaceViewMode = useCallback((workspaceId: string) => {
@@ -358,31 +351,23 @@ export const useSessionState = () => {
 
   // Move focus between panes in a workspace
   const moveFocusInWorkspace = useCallback((workspaceId: string, direction: FocusDirection): boolean => {
-    console.log('[moveFocusInWorkspace] Called with:', { workspaceId, direction });
-    
     const workspace = workspaces.find(w => w.id === workspaceId);
     if (!workspace) {
-      console.log('[moveFocusInWorkspace] Workspace not found');
       return false;
     }
     
     // Get current focused session, or first session if none focused
     const sessionIds = collectSessionIds(workspace.root);
-    console.log('[moveFocusInWorkspace] Session IDs:', sessionIds);
     
     const currentFocused = workspace.focusedSessionId || sessionIds[0];
     if (!currentFocused) {
-      console.log('[moveFocusInWorkspace] No current focused session');
       return false;
     }
-    console.log('[moveFocusInWorkspace] Current focused:', currentFocused);
     
     // Find the next session in the given direction
     const nextSessionId = getNextFocusSessionId(workspace.root, currentFocused, direction);
-    console.log('[moveFocusInWorkspace] Next session:', nextSessionId);
     
     if (!nextSessionId) {
-      console.log('[moveFocusInWorkspace] No next session found');
       return false;
     }
     
@@ -392,7 +377,6 @@ export const useSessionState = () => {
       return { ...ws, focusedSessionId: nextSessionId };
     }));
     
-    console.log('[moveFocusInWorkspace] Focus updated to:', nextSessionId);
     return true;
   }, [workspaces]);
 
@@ -428,11 +412,10 @@ export const useSessionState = () => {
       startupCommand: snippet.command,
     }));
 
-    setSessions(prev => [...prev, ...sessionsWithWorkspace]);
-    setWorkspaces(prev => [...prev, workspace]);
-    setActiveTabId(workspace.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setActiveTabId is a stable store method reference
-  }, []);
+	    setSessions(prev => [...prev, ...sessionsWithWorkspace]);
+	    setWorkspaces(prev => [...prev, workspace]);
+	    setActiveTabId(workspace.id);
+	  }, [setActiveTabId]);
 
   const orphanSessions = useMemo(() => sessions.filter(s => !s.workspaceId), [sessions]);
 

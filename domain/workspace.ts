@@ -188,12 +188,12 @@ export const collectSessionIds = (node: WorkspaceNode): string[] => {
 /**
  * Find a pane node by session ID in the workspace tree.
  */
-const findPaneBySessionId = (node: WorkspaceNode, sessionId: string): WorkspaceNode | null => {
+const _findPaneBySessionId = (node: WorkspaceNode, sessionId: string): WorkspaceNode | null => {
   if (node.type === 'pane') {
     return node.sessionId === sessionId ? node : null;
   }
   for (const child of node.children) {
-    const found = findPaneBySessionId(child, sessionId);
+    const found = _findPaneBySessionId(child, sessionId);
     if (found) return found;
   }
   return null;
@@ -203,12 +203,12 @@ const findPaneBySessionId = (node: WorkspaceNode, sessionId: string): WorkspaceN
  * Get the path to a session in the workspace tree.
  * Returns an array of indices representing the path from root to the pane.
  */
-const getPathToSession = (node: WorkspaceNode, sessionId: string, path: number[] = []): number[] | null => {
+const _getPathToSession = (node: WorkspaceNode, sessionId: string, path: number[] = []): number[] | null => {
   if (node.type === 'pane') {
     return node.sessionId === sessionId ? path : null;
   }
   for (let i = 0; i < node.children.length; i++) {
-    const result = getPathToSession(node.children[i], sessionId, [...path, i]);
+    const result = _getPathToSession(node.children[i], sessionId, [...path, i]);
     if (result) return result;
   }
   return null;
@@ -286,17 +286,11 @@ export const getNextFocusSessionId = (
   direction: FocusDirection
 ): string | null => {
   const positions = collectPanePositions(root);
-  console.log('[getNextFocusSessionId] All positions:');
-  positions.forEach((p, i) => {
-    console.log(`  [${i}] sessionId: ${p.sessionId.slice(0, 8)}..., x: ${p.x}, y: ${p.y}, w: ${p.width}, h: ${p.height}`);
-  });
   
   const current = positions.find(p => p.sessionId === currentSessionId);
   if (!current) {
-    console.log('[getNextFocusSessionId] Current session not found in positions');
     return null;
   }
-  console.log('[getNextFocusSessionId] Current pane:', current.sessionId.slice(0, 8), 'at x:', current.x, 'y:', current.y, 'w:', current.width, 'h:', current.height);
 
   // Filter candidates based on direction
   let candidates: PanePosition[] = [];
@@ -349,11 +343,6 @@ export const getNextFocusSessionId = (
       break;
   }
 
-  console.log('[getNextFocusSessionId] Direction:', direction, 'Candidates count:', candidates.length, '(wraparound enabled)');
-  candidates.forEach((c, i) => {
-    console.log(`  Candidate[${i}]: ${c.sessionId.slice(0, 8)}... at x: ${c.x}, y: ${c.y}`);
-  });
-
   if (candidates.length === 0) return null;
 
   // Calculate center point of current pane for scoring
@@ -400,6 +389,5 @@ export const getNextFocusSessionId = (
     }
   }
 
-  console.log('[getNextFocusSessionId] Best candidate:', best?.sessionId?.slice(0, 8));
   return best?.sessionId || null;
 };

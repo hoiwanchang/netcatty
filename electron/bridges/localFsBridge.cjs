@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Local Filesystem Bridge - Handles local file operations
  * Extracted from main.cjs for single responsibility
  */

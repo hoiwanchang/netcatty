@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Window Manager - Handles Electron window creation and management
  * Extracted from main.cjs for single responsibility
  */

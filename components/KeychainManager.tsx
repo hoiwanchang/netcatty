@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadgeCheck,
   ChevronDown,
   ChevronRight,
@@ -15,8 +15,10 @@
   UserPlus,
 } from "lucide-react";
 import React, { useCallback, useMemo, useState } from "react";
+import { logger } from "../lib/logger";
 import { cn } from "../lib/utils";
 import { Host, Identity, KeyType, SSHKey } from "../types";
+import { useKeychainBackend } from "../application/state/useKeychainBackend";
 import SelectHostPanel from "./SelectHostPanel";
 import { AsidePanel, AsidePanelContent } from "./ui/aside-panel";
 import { Button } from "./ui/button";
@@ -77,6 +79,7 @@ const KeychainManager: React.FC<KeychainManagerProps> = ({
   onSaveHost,
   onCreateGroup,
 }) => {
+  const { generateKeyPair, execCommand } = useKeychainBackend();
   const [activeFilter, setActiveFilter] = useState<FilterTab>("key");
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -244,7 +247,7 @@ echo $3 >> "$FILE"`);
         await navigator.clipboard.writeText(key.publicKey);
         // Could add toast notification here
       } catch (err) {
-        console.error("Failed to copy public key:", err);
+        logger.error("Failed to copy public key:", err);
       }
     }
   }, []);
@@ -328,16 +331,19 @@ echo $3 >> "$FILE"`);
       const keySize = draftKey.keySize;
 
       // Use real key generation via Electron backend
-      if (window.netcatty?.generateKeyPair) {
-        const result = await window.netcatty.generateKeyPair({
-          type: keyType,
-          bits: keySize,
-          comment: `${draftKey.label.trim()}@netcatty`,
-        });
-
-        if (!result.success || !result.privateKey || !result.publicKey) {
-          throw new Error(result.error || "Failed to generate key pair");
-        }
+      const result = await generateKeyPair({
+        type: keyType,
+        bits: keySize,
+        comment: `${draftKey.label.trim()}@netcatty`,
+      });
+      if (!result) {
+        throw new Error(
+          "Key generation not available - please ensure the app is running in Electron",
+        );
+      }
+      if (!result.success || !result.privateKey || !result.publicKey) {
+        throw new Error(result.error || "Failed to generate key pair");
+      }
 
         const newKey: SSHKey = {
           id: crypto.randomUUID(),
@@ -355,17 +361,12 @@ echo $3 >> "$FILE"`);
 
         onSave(newKey);
         closePanel();
-      } else {
-        throw new Error(
-          "Key generation not available - please ensure the app is running in Electron",
-        );
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate key");
     } finally {
       setIsGenerating(false);
     }
-  }, [draftKey, onSave, closePanel]);
+  }, [draftKey, onSave, closePanel, generateKeyPair]);
 
   // Handle biometric key generation (Windows Hello)
   const handleGenerateBiometric = useCallback(async () => {
@@ -1235,7 +1236,7 @@ echo $3 >> "$FILE"`);
                       const command = scriptWithVars;
 
                       // Execute via SSH
-                      const result = await window.netcatty?.execCommand({
+                      const result = await execCommand({
                         hostname: exportHost.hostname,
                         username: exportHost.username,
                         port: exportHost.port || 22,

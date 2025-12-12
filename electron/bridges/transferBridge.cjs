@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Transfer Bridge - Handles file transfers with progress and cancellation
  * Extracted from main.cjs for single responsibility
  */

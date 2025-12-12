@@ -1,4 +1,4 @@
-﻿import {
+import {
   ArrowUp,
   ChevronRight,
   Database,
@@ -33,6 +33,8 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useSftpBackend } from "../application/state/useSftpBackend";
+import { logger } from "../lib/logger";
 import { cn } from "../lib/utils";
 import { Host, RemoteFile } from "../types";
 import { DistroAvatar } from "./DistroAvatar";
@@ -196,7 +198,7 @@ const getFileIcon = (fileName: string, isDirectory: boolean) => {
 
   // Default
   return <File size={18} className={iconClass} />;
-};
+  };
 
 // Format bytes with appropriate unit (B, KB, MB, GB)
 const formatBytes = (bytes: number | string): string => {
@@ -254,6 +256,17 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
   open,
   onClose,
 }) => {
+  const {
+    openSftp,
+    closeSftp: closeSftpBackend,
+    listSftp,
+    readSftp,
+    writeSftpBinaryWithProgress,
+    writeSftpBinary,
+    writeSftp,
+    deleteSftp,
+    mkdirSftp,
+  } = useSftpBackend();
   const [currentPath, setCurrentPath] = useState("/");
   const [files, setFiles] = useState<RemoteFile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -299,8 +312,7 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
 
   const ensureSftp = useCallback(async () => {
     if (sftpIdRef.current) return sftpIdRef.current;
-    if (!window.netcatty?.openSftp) throw new Error("SFTP bridge unavailable");
-    const sftpId = await window.netcatty.openSftp({
+    const sftpId = await openSftp({
       sessionId: `sftp-modal-${host.id}`,
       hostname: credentials.hostname,
       username: credentials.username || "root",
@@ -317,6 +329,7 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
     credentials.port,
     credentials.password,
     credentials.privateKey,
+    openSftp,
   ]);
 
   const loadFiles = useCallback(
@@ -343,7 +356,7 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
         setError(null);
         setLoading(true);
         const sftpId = await ensureSftp();
-        const list = await window.netcatty.listSftp(sftpId, path);
+        const list = await listSftp(sftpId, path);
         if (loadSeqRef.current !== requestId) return;
         dirCacheRef.current.set(cacheKey, {
           files: list,
@@ -353,7 +366,7 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
         setSelectedFiles(new Set());
       } catch (e) {
         if (loadSeqRef.current !== requestId) return;
-        console.error("Failed to load files", e);
+        logger.error("Failed to load files", e);
         setError(e instanceof Error ? e.message : "Failed to load directory");
         setFiles([]);
       } finally {
@@ -362,26 +375,26 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
         }
       }
     },
-    [ensureSftp, host.id],
+    [ensureSftp, host.id, listSftp],
   );
 
-  const closeSftp = async () => {
-    if (sftpIdRef.current && window.netcatty?.closeSftp) {
+  const closeSftpSession = useCallback(async () => {
+    if (sftpIdRef.current) {
       try {
-        await window.netcatty.closeSftp(sftpIdRef.current);
+        await closeSftpBackend(sftpIdRef.current);
       } catch {
         // Silently ignore close errors - connection may already be closed
       }
     }
     sftpIdRef.current = null;
-  };
+  }, [closeSftpBackend]);
 
   useEffect(() => {
     return () => {
       // Cleanup on unmount
-      closeSftp();
+      void closeSftpSession();
     };
-  }, []);
+  }, [closeSftpSession]);
 
   useEffect(() => {
     if (open) {
@@ -393,10 +406,10 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
     } else {
       // Invalidate any in-flight directory load
       loadSeqRef.current += 1;
-      closeSftp();
+      void closeSftpSession();
       initializedRef.current = false;
     }
-  }, [open, currentPath, loadFiles]);
+  }, [open, currentPath, loadFiles, closeSftpSession]);
 
   const handleNavigate = useCallback((path: string) => {
     // Prevent double navigation (e.g., from double-click race condition)
@@ -415,28 +428,31 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
     setCurrentPath(parent);
   };
 
-  const handleDownload = async (file: RemoteFile) => {
-    try {
-      const sftpId = await ensureSftp();
-      const fullPath =
-        currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`;
-      setLoading(true);
-      const content = await window.netcatty.readSftp(sftpId, fullPath);
-      const blob = new Blob([content], { type: "application/octet-stream" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = file.name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Download failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleDownload = useCallback(
+    async (file: RemoteFile) => {
+      try {
+        const sftpId = await ensureSftp();
+        const fullPath =
+          currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`;
+        setLoading(true);
+        const content = await readSftp(sftpId, fullPath);
+        const blob = new Blob([content], { type: "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Download failed");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [currentPath, ensureSftp, readSftp],
+  );
 
   const handleUploadFile = async (
     file: File,
@@ -466,70 +482,69 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
         currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`;
 
       // Use real-time progress API if available
-      if (window.netcatty.writeSftpBinaryWithProgress) {
-        await window.netcatty.writeSftpBinaryWithProgress(
-          sftpId,
-          fullPath,
-          arrayBuffer,
-          taskId,
-          // Real-time progress callback
-          (transferred: number, total: number, speed: number) => {
-            const progress =
-              total > 0 ? Math.round((transferred / total) * 100) : 0;
-            setUploadTasks((prev) =>
-              prev.map((t) =>
-                t.id === taskId && t.status === "uploading"
-                  ? {
-                    ...t,
-                    transferredBytes: transferred,
-                    progress,
-                    speed,
-                  }
-                  : t,
-              ),
-            );
-          },
-          // Complete callback
-          () => {
-            const totalTime = (Date.now() - startTime) / 1000;
-            const finalSpeed = totalTime > 0 ? file.size / totalTime : 0;
-            setUploadTasks((prev) =>
-              prev.map((t) =>
-                t.id === taskId
-                  ? {
-                    ...t,
-                    status: "completed" as const,
-                    progress: 100,
-                    transferredBytes: file.size,
-                    speed: finalSpeed,
-                  }
-                  : t,
-              ),
-            );
-          },
-          // Error callback
-          (error: string) => {
-            setUploadTasks((prev) =>
-              prev.map((t) =>
-                t.id === taskId
-                  ? {
-                    ...t,
-                    status: "failed" as const,
-                    error,
-                  }
-                  : t,
-              ),
-            );
-          },
-        );
-        return true;
-      } else if (window.netcatty.writeSftpBinary) {
+      const progressResult = await writeSftpBinaryWithProgress(
+        sftpId,
+        fullPath,
+        arrayBuffer,
+        taskId,
+        // Real-time progress callback
+        (transferred: number, total: number, speed: number) => {
+          const progress = total > 0 ? Math.round((transferred / total) * 100) : 0;
+          setUploadTasks((prev) =>
+            prev.map((t) =>
+              t.id === taskId && t.status === "uploading"
+                ? {
+                  ...t,
+                  transferredBytes: transferred,
+                  progress,
+                  speed,
+                }
+                : t,
+            ),
+          );
+        },
+        // Complete callback
+        () => {
+          const totalTime = (Date.now() - startTime) / 1000;
+          const finalSpeed = totalTime > 0 ? file.size / totalTime : 0;
+          setUploadTasks((prev) =>
+            prev.map((t) =>
+              t.id === taskId
+                ? {
+                  ...t,
+                  status: "completed" as const,
+                  progress: 100,
+                  transferredBytes: file.size,
+                  speed: finalSpeed,
+                }
+                : t,
+            ),
+          );
+        },
+        // Error callback
+        (error: string) => {
+          setUploadTasks((prev) =>
+            prev.map((t) =>
+              t.id === taskId
+                ? {
+                  ...t,
+                  status: "failed" as const,
+                  error,
+                }
+                : t,
+            ),
+          );
+        },
+      );
+      if (progressResult) return true;
+
+      try {
         // Fallback to non-progress API
-        await window.netcatty.writeSftpBinary(sftpId, fullPath, arrayBuffer);
-      } else {
+        await writeSftpBinary(sftpId, fullPath, arrayBuffer);
+      } catch {
         // Fallback: read as text (works for text files)
         const text = await file.text();
-        await window.netcatty.writeSftp(sftpId, fullPath, text);
+        await writeSftp(sftpId, fullPath, text);
       }
 
       // Calculate final speed (for fallback methods)
@@ -607,9 +622,7 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
       const fullPath =
         currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`;
       // Use deleteSftp which handles both files and directories
-      if (window.netcatty.deleteSftp) {
-        await window.netcatty.deleteSftp(sftpId, fullPath);
-      }
+      await deleteSftp(sftpId, fullPath);
       await loadFiles(currentPath, { force: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed");
@@ -623,7 +636,7 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
       const sftpId = await ensureSftp();
       const fullPath =
         currentPath === "/" ? `/${folderName}` : `${currentPath}/${folderName}`;
-      await window.netcatty.mkdirSftp(sftpId, fullPath);
+      await mkdirSftp(sftpId, fullPath);
       await loadFiles(currentPath, { force: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create folder");
@@ -659,7 +672,7 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
   };
 
   const handleClose = async () => {
-    await closeSftp();
+    await closeSftpSession();
     setIsEditingPath(false);
     onClose();
   };
@@ -852,9 +865,7 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
       for (const fileName of fileNames) {
         const fullPath =
           currentPath === "/" ? `/${fileName}` : `${currentPath}/${fileName}`;
-        if (window.netcatty.deleteSftp) {
-          await window.netcatty.deleteSftp(sftpId, fullPath);
-        }
+        await deleteSftp(sftpId, fullPath);
       }
       await loadFiles(currentPath, { force: true });
       setSelectedFiles(new Set());

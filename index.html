@@ -104,41 +104,9 @@
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
-  </style>
-  <script>
-    // Polyfill process for environment variables if missing
-    if (typeof process === 'undefined') {
-      window.process = { env: {} };
-    }
-  </script>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@19.2.1",
-    "react/jsx-runtime": "https://esm.sh/react@19.2.1/jsx-runtime",
-    "react-dom/client": "https://esm.sh/react-dom@19.2.1/client",
-    "react-dom": "https://esm.sh/react-dom@19.2.1",
-    "@google/genai": "https://esm.sh/@google/genai@1.31.0",
-    "lucide-react": "https://esm.sh/lucide-react@0.556.0?external=react,react-dom",
-    "clsx": "https://esm.sh/clsx@2.1.0",
-    "tailwind-merge": "https://esm.sh/tailwind-merge@2.2.0",
-    "xterm": "https://esm.sh/xterm@5.3.0",
-    "xterm-addon-fit": "https://esm.sh/xterm-addon-fit@0.8.0?external=xterm",
-    "@radix-ui/react-dialog": "https://esm.sh/@radix-ui/react-dialog@1.1.15?external=react,react-dom",
-    "@radix-ui/react-tabs": "https://esm.sh/@radix-ui/react-tabs@1.1.13?external=react,react-dom",
-    "@radix-ui/react-select": "https://esm.sh/@radix-ui/react-select@2.2.6?external=react,react-dom",
-    "@radix-ui/react-popover": "https://esm.sh/@radix-ui/react-popover@1.1.15?external=react,react-dom",
-    "@radix-ui/react-context-menu": "https://esm.sh/@radix-ui/react-context-menu@2.2.16?external=react,react-dom",
-    "@radix-ui/react-collapsible": "https://esm.sh/@radix-ui/react-collapsible@1.1.12?external=react,react-dom",
-    "@radix-ui/react-scroll-area": "https://esm.sh/@radix-ui/react-scroll-area@1.2.10?external=react,react-dom",
-    "@radix-ui/react-slot": "https://esm.sh/@radix-ui/react-slot@1.2.4?external=react,react-dom",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/"
-  }
-}
-</script>
-  <link rel="stylesheet" href="/index.css">
-</head>
+	  </style>
+	  <link rel="stylesheet" href="/index.css">
+	</head>
 
 <body class="bg-background text-foreground overflow-hidden antialiased h-screen w-screen">
   <div id="root" class="h-full w-full"></div>

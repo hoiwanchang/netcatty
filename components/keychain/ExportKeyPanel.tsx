@@ -1,9 +1,10 @@
-﻿/**
+/**
  * Export Key Panel - Export SSH key to remote host
  */
 
 import { ChevronRight, Info } from 'lucide-react';
 import React, { useState } from 'react';
+import { useKeychainBackend } from '../../application/state/useKeychainBackend';
 import { cn } from '../../lib/utils';
 import { Host, SSHKey } from '../../types';
 import { Button } from '../ui/button';
@@ -44,14 +45,15 @@ export const ExportKeyPanel: React.FC<ExportKeyPanelProps> = ({
     exportHost,
     _setExportHost, // Host selection handled by onShowHostSelector callback
     onShowHostSelector,
-    onSaveHost,
-    onClose,
+	onSaveHost,
+	onClose,
 }) => {
-    const [exportLocation, setExportLocation] = useState('.ssh');
-    const [exportFilename, setExportFilename] = useState('authorized_keys');
-    const [exportAdvancedOpen, setExportAdvancedOpen] = useState(false);
-    const [exportScript, setExportScript] = useState(DEFAULT_EXPORT_SCRIPT);
-    const [isExporting, setIsExporting] = useState(false);
+	const { execCommand } = useKeychainBackend();
+	const [exportLocation, setExportLocation] = useState('.ssh');
+	const [exportFilename, setExportFilename] = useState('authorized_keys');
+	const [exportAdvancedOpen, setExportAdvancedOpen] = useState(false);
+	const [exportScript, setExportScript] = useState(DEFAULT_EXPORT_SCRIPT);
+	const [isExporting, setIsExporting] = useState(false);
 
     const isMac = isMacOS();
 
@@ -80,14 +82,14 @@ export const ExportKeyPanel: React.FC<ExportKeyPanelProps> = ({
                 .replace(/\$2/g, exportFilename)
                 .replace(/\$3/g, `'${escapedPublicKey}'`);
 
-            const command = scriptWithVars;
+			const command = scriptWithVars;
 
-            // Execute via SSH
-            const result = await window.netcatty?.execCommand({
-                hostname: exportHost.hostname,
-                username: exportHost.username,
-                port: exportHost.port || 22,
-                password: exportHost.password,
+			// Execute via SSH
+			const result = await execCommand({
+				hostname: exportHost.hostname,
+				username: exportHost.username,
+				port: exportHost.port || 22,
+				password: exportHost.password,
                 privateKey: hostPrivateKey,
                 command,
                 timeout: 30000,

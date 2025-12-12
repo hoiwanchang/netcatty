@@ -14,16 +14,15 @@ import {
   X,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useSyncState } from "../application/state/useSyncState";
 import { Host, SSHKey, Snippet, TerminalSettings, CursorShape, RightClickBehavior, LinkModifier, DEFAULT_TERMINAL_SETTINGS, HotkeyScheme, KeyBinding, keyEventToString } from "../domain/models";
 import { TERMINAL_THEMES } from "../infrastructure/config/terminalThemes";
 import { TERMINAL_FONTS, MIN_FONT_SIZE, MAX_FONT_SIZE } from "../infrastructure/config/fonts";
-import {
-  loadFromGist,
-  syncToGist,
-} from "../infrastructure/services/syncService";
+import { logger } from "../lib/logger";
 import { cn } from "../lib/utils";
 import { SyncConfig } from "../types";
 import { Button } from "./ui/button";
+import { toast } from "./ui/toast";
 import {
   Dialog,
   DialogContent,
@@ -268,12 +267,14 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
   // Sync State
   const [githubToken, setGithubToken] = useState(syncConfig?.githubToken || "");
   const [gistId, setGistId] = useState(syncConfig?.gistId || "");
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<"idle" | "success" | "error">(
-    "idle",
-  );
+  const { isSyncing, syncStatus, resetSyncStatus, verify, upload, download } =
+    useSyncState();
 
   const isMac = hotkeyScheme === 'mac';
+
+  useEffect(() => {
+    if (isOpen) resetSyncStatus();
+  }, [isOpen, resetSyncStatus]);
 
   // Handle key recording for shortcut editing
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -368,36 +369,26 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
     try {
       JSON.parse(importText);
       onImport(importText);
-      alert("Configuration imported successfully!");
+      toast.success("Configuration imported successfully!");
       setImportText("");
     } catch {
-      alert("Invalid JSON format.");
+      toast.error("Invalid JSON format.");
     }
   };
 
   const handleSaveSyncConfig = async () => {
     if (!githubToken) return;
-
-    setIsSyncing(true);
-    setSyncStatus("idle");
     try {
-      if (gistId) {
-        await loadFromGist(githubToken, gistId);
-      }
+      await verify(githubToken, gistId || undefined);
       onSyncConfigChange({ githubToken, gistId });
-      setSyncStatus("success");
     } catch (e) {
-      console.error(e);
-      setSyncStatus("error");
-      alert("Failed to verify Gist or Token.");
-    } finally {
-      setIsSyncing(false);
+      logger.error(e);
+      toast.error("Failed to verify Gist or Token.");
     }
   };
 
   const performSyncUpload = async () => {
     if (!githubToken) return;
-    setIsSyncing(true);
     try {
       const data = exportData() as {
         keys: SSHKey[];
@@ -405,11 +396,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
         snippets: Snippet[];
         customGroups: string[];
       };
-      const newGistId = await syncToGist(
-        githubToken,
-        gistId || undefined,
-        data,
-      );
+      const newGistId = await upload(githubToken, gistId || undefined, data);
       if (!gistId) {
         setGistId(newGistId);
         onSyncConfigChange({
@@ -420,26 +407,21 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
       } else {
         onSyncConfigChange({ ...syncConfig!, lastSync: Date.now() });
       }
-      alert("Backup uploaded to Gist successfully!");
+      toast.success("Backup uploaded to Gist successfully!");
     } catch (e) {
-      alert("Upload failed: " + e);
-    } finally {
-      setIsSyncing(false);
+      toast.error(String(e), "Upload failed");
     }
   };
 
   const performSyncDownload = async () => {
     if (!githubToken || !gistId) return;
-    setIsSyncing(true);
     try {
-      const data = await loadFromGist(githubToken, gistId);
+      const data = await download(githubToken, gistId);
       onImport(JSON.stringify(data));
       onSyncConfigChange({ ...syncConfig!, lastSync: Date.now() });
-      alert("Configuration restored from Gist!");
+      toast.success("Configuration restored from Gist!");
     } catch (e) {
-      alert("Download failed: " + e);
-    } finally {
-      setIsSyncing(false);
+      toast.error(String(e), "Download failed");
     }
   };
 

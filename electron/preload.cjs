@@ -1,4 +1,4 @@
-﻿const { ipcRenderer, contextBridge } = require("electron");
+const { ipcRenderer, contextBridge } = require("electron");
 
 const dataListeners = new Map();
 const exitListeners = new Map();

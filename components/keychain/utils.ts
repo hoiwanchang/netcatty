@@ -4,6 +4,7 @@
 
 import { BadgeCheck,Fingerprint,Key,Shield } from 'lucide-react';
 import React from 'react';
+import { logger } from '../../lib/logger';
 import { KeyType,SSHKey } from '../../types';
 
 /**
@@ -109,7 +110,7 @@ export const createFido2Credential = async (label: string): Promise<{
             rpId,
         };
     } catch (error) {
-        console.error('FIDO2 credential creation failed:', error);
+        logger.error('FIDO2 credential creation failed:', error);
         throw error;
     }
 };
@@ -200,7 +201,7 @@ export const createBiometricCredential = async (label: string): Promise<{
             rpId,
         };
     } catch (error) {
-        console.error('WebAuthn credential creation failed:', error);
+        logger.error('WebAuthn credential creation failed:', error);
         throw error;
     }
 };
@@ -242,7 +243,7 @@ export const copyToClipboard = async (text: string): Promise<boolean> => {
         await navigator.clipboard.writeText(text);
         return true;
     } catch (err) {
-        console.error('Failed to copy to clipboard:', err);
+        logger.error('Failed to copy to clipboard:', err);
         return false;
     }
 };

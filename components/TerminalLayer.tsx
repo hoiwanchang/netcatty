@@ -387,9 +387,6 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   const isFocusMode = activeWorkspace?.viewMode === 'focus';
   const focusedSessionId = activeWorkspace?.focusedSessionId;
 
-  // Debug log for focus tracking
-  console.log('[TerminalLayer] focusedSessionId:', focusedSessionId?.slice(0, 8), 'isFocusMode:', isFocusMode);
-
   // Track previous focusedSessionId to detect changes
   const prevFocusedSessionIdRef = useRef<string | undefined>(undefined);
 
@@ -421,7 +418,6 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
         const textarea = targetPane.querySelector('textarea.xterm-helper-textarea') as HTMLTextAreaElement | null;
         if (textarea) {
           textarea.focus();
-          console.log('[TerminalLayer] Direct DOM focus on session:', focusedSessionId.slice(0, 8));
         }
       }
     };

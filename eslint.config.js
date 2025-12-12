@@ -119,4 +119,53 @@ export default [
       "no-case-declarations": "warn",
     },
   },
+  {
+    files: ["**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "window",
+          property: "netcatty",
+          message:
+            "Do not access window.netcatty directly; use netcattyBridge or an application/state backend hook.",
+        },
+      ],
+      "no-restricted-globals": ["error", "localStorage", "sessionStorage"],
+    },
+  },
+  {
+    files: ["infrastructure/services/netcattyBridge.ts"],
+    rules: {
+      "no-restricted-properties": "off",
+    },
+  },
+  {
+    files: ["infrastructure/persistence/localStorageAdapter.ts"],
+    rules: {
+      "no-restricted-globals": "off",
+    },
+  },
+  {
+    files: ["components/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "../infrastructure/persistence/*",
+                "../infrastructure/services/*",
+                "../../infrastructure/persistence/*",
+                "../../infrastructure/services/*",
+              ],
+              message:
+                "Components should not import infrastructure persistence/services; use application/state hooks instead.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

@@ -1,6 +1,7 @@
-﻿import { Bell, Copy, Folder, LayoutGrid, Minus, Moon, MoreHorizontal, Plus, Shield, Square, Sun, TerminalSquare, User, X } from 'lucide-react';
+import { Bell, Copy, Folder, LayoutGrid, Minus, Moon, MoreHorizontal, Plus, Shield, Square, Sun, TerminalSquare, User, X } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { activeTabStore, useActiveTabId } from '../application/state/activeTabStore';
+import { useWindowControls } from '../application/state/useWindowControls';
 import { cn } from '../lib/utils';
 import { TerminalSession, Workspace } from '../types';
 import { Button } from './ui/button';
@@ -39,31 +40,32 @@ const sessionStatusDot = (status: TerminalSession['status']) => {
 
 // Custom window controls for Windows/Linux (frameless window)
 const WindowControls: React.FC = memo(() => {
+  const { minimize, maximize, close, isMaximized: fetchIsMaximized } = useWindowControls();
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
     // Check initial maximized state
-    window.netcatty?.windowIsMaximized?.().then(setIsMaximized);
+    fetchIsMaximized().then(v => setIsMaximized(!!v));
 
     // Listen for window resize to update maximized state
     const handleResize = () => {
-      window.netcatty?.windowIsMaximized?.().then(setIsMaximized);
+      fetchIsMaximized().then(v => setIsMaximized(!!v));
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [fetchIsMaximized]);
 
   const handleMinimize = () => {
-    window.netcatty?.windowMinimize?.();
+    minimize();
   };
 
   const handleMaximize = async () => {
-    const result = await window.netcatty?.windowMaximize?.();
-    setIsMaximized(result ?? false);
+    const result = await maximize();
+    setIsMaximized(!!result);
   };
 
   const handleClose = () => {
-    window.netcatty?.windowClose?.();
+    close();
   };
 
   return (
@@ -118,6 +120,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
   onReorderTabs,
 }) => {
   // Subscribe to activeTabId from external store
+  const { maximize } = useWindowControls();
   const activeTabId = useActiveTabId();
   const isVaultActive = activeTabId === 'vault';
   const isSftpActive = activeTabId === 'sftp';
@@ -436,9 +439,9 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
     // Only handle double-click on the drag region itself, not on buttons/tabs
     if ((e.target as HTMLElement).closest('.app-no-drag')) return;
     if (!isMacClient) {
-      window.netcatty?.windowMaximize?.();
+      maximize();
     }
-  }, [isMacClient]);
+  }, [isMacClient, maximize]);
 
   return (
     <div

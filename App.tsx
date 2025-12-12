@@ -3,6 +3,7 @@ import { activeTabStore, useIsVaultActive } from './application/state/activeTabS
 import { useSessionState } from './application/state/useSessionState';
 import { useSettingsState } from './application/state/useSettingsState';
 import { useVaultState } from './application/state/useVaultState';
+import { useWindowControls } from './application/state/useWindowControls';
 import { matchesKeyBinding } from './domain/models';
 import ProtocolSelectDialog from './components/ProtocolSelectDialog';
 import { QuickSwitcher } from './components/QuickSwitcher';
@@ -405,14 +406,15 @@ function App() {
     setIsQuickSwitcherOpen(true);
   }, []);
 
+  const { openSettingsWindow } = useWindowControls();
+
   const handleOpenSettings = useCallback(() => {
     // Try to open in a separate window, fallback to modal dialog
-    if (window.netcatty?.openSettingsWindow) {
-      window.netcatty.openSettingsWindow();
-    } else {
-      setIsSettingsOpen(true);
-    }
-  }, []);
+    void (async () => {
+      const opened = await openSettingsWindow();
+      if (!opened) setIsSettingsOpen(true);
+    })();
+  }, [openSettingsWindow]);
 
   const handleEndSessionDrag = useCallback(() => {
     setDraggingSessionId(null);

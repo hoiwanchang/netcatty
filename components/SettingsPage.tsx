@@ -19,6 +19,7 @@ import {
     X,
 } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
+import { useSyncState } from "../application/state/useSyncState";
 import {
     CursorShape,
     RightClickBehavior,
@@ -30,10 +31,6 @@ import {
 } from "../domain/models";
 import { TERMINAL_THEMES } from "../infrastructure/config/terminalThemes";
 import { TERMINAL_FONTS, MIN_FONT_SIZE, MAX_FONT_SIZE } from "../infrastructure/config/fonts";
-import {
-    loadFromGist,
-    syncToGist,
-} from "../infrastructure/services/syncService";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -41,8 +38,10 @@ import { Label } from "./ui/label";
 import { ScrollArea } from "./ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Textarea } from "./ui/textarea";
+import { toast } from "./ui/toast";
 import { useSettingsState } from "../application/state/useSettingsState";
 import { useVaultState } from "../application/state/useVaultState";
+import { useWindowControls } from "../application/state/useWindowControls";
 
 // More comprehensive color palette
 const COLORS = [
@@ -265,9 +264,10 @@ export default function SettingsPage() {
         exportData,
         importDataFromString,
     } = useVaultState();
+    const { closeSettingsWindow } = useWindowControls();
 
     // Local state
-    const [isSyncing, setIsSyncing] = useState(false);
+    const { isSyncing, upload, download } = useSyncState();
     const [gistToken, setGistToken] = useState(syncConfig?.githubToken || "");
     const [gistId, setGistId] = useState(syncConfig?.gistId || "");
     const [importText, setImportText] = useState("");
@@ -276,8 +276,8 @@ export default function SettingsPage() {
 
     // Close window handler
     const handleClose = useCallback(() => {
-        window.netcatty?.closeSettingsWindow?.();
-    }, []);
+        closeSettingsWindow();
+    }, [closeSettingsWindow]);
 
     // Helper functions
     const getHslStyle = (hsl: string) => ({ backgroundColor: `hsl(${hsl})` });
@@ -370,41 +370,36 @@ export default function SettingsPage() {
 
     // Sync handlers
     const handleSaveGist = async () => {
-        if (!gistToken) return alert("Please enter a GitHub token");
+        if (!gistToken) return toast.error("Please enter a GitHub token");
         updateSyncConfig({ githubToken: gistToken, gistId: gistId || undefined });
-        setIsSyncing(true);
         try {
-            const newId = await syncToGist(
-                gistToken,
-                gistId || undefined,
-                { hosts, keys, snippets, customGroups: [] }
-            );
+            const newId = await upload(gistToken, gistId || undefined, {
+                hosts,
+                keys,
+                snippets,
+                customGroups: [],
+            });
             if (newId && newId !== gistId) {
                 setGistId(newId);
                 updateSyncConfig({ githubToken: gistToken, gistId: newId });
-                alert("Synced! Gist ID saved.");
+                toast.success("Synced! Gist ID saved.");
             } else {
-                alert("Synced successfully.");
+                toast.success("Synced successfully.");
             }
         } catch (e) {
-            alert("Sync failed: " + e);
-        } finally {
-            setIsSyncing(false);
+            toast.error(String(e), "Sync failed");
         }
     };
 
     const handleLoadGist = async () => {
-        if (!gistToken || !gistId) return alert("Token and Gist ID required");
-        setIsSyncing(true);
+        if (!gistToken || !gistId) return toast.error("Token and Gist ID required");
         try {
-            const data = await loadFromGist(gistToken, gistId);
+            const data = await download(gistToken, gistId);
             if (!data) throw new Error("No data found in Gist");
             importDataFromString(JSON.stringify(data));
-            alert("Loaded successfully!");
+            toast.success("Loaded successfully!");
         } catch (e) {
-            alert("Download failed: " + e);
-        } finally {
-            setIsSyncing(false);
+            toast.error(String(e), "Download failed");
         }
     };
 
@@ -1224,9 +1219,9 @@ export default function SettingsPage() {
                                         try {
                                             importDataFromString(importText);
                                             setImportText("");
-                                            alert("Import successful!");
+                                            toast.success("Import successful!");
                                         } catch (e) {
-                                            alert("Import failed: " + e);
+                                            toast.error(String(e), "Import failed");
                                         }
                                     }}
                                     disabled={!importText.trim()}

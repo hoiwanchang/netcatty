@@ -1,4 +1,4 @@
-﻿import { useCallback,useEffect,useMemo,useState } from 'react';
+import { useCallback,useEffect,useMemo,useState } from 'react';
 import { SyncConfig, TerminalSettings, DEFAULT_TERMINAL_SETTINGS, HotkeyScheme, CustomKeyBindings, DEFAULT_KEY_BINDINGS, KeyBinding } from '../../domain/models';
 import {
 STORAGE_KEY_COLOR,
@@ -15,6 +15,7 @@ STORAGE_KEY_CUSTOM_CSS,
 import { TERMINAL_THEMES } from '../../infrastructure/config/terminalThemes';
 import { TERMINAL_FONTS, DEFAULT_FONT_SIZE } from '../../infrastructure/config/fonts';
 import { localStorageAdapter } from '../../infrastructure/persistence/localStorageAdapter';
+import { netcattyBridge } from '../../infrastructure/services/netcattyBridge';
 
 const DEFAULT_COLOR = '221.2 83.2% 53.3%';
 const DEFAULT_THEME: 'light' | 'dark' = 'light';
@@ -40,7 +41,7 @@ const applyThemeTokens = (theme: 'light' | 'dark', primaryColor: string) => {
   root.style.setProperty('--accent-foreground', accentForeground);
   
   // Sync with native window title bar (Electron)
-  window.netcatty?.setTheme?.(theme);
+  netcattyBridge.get()?.setTheme?.(theme);
 };
 
 export const useSettingsState = () => {
@@ -109,14 +110,14 @@ export const useSettingsState = () => {
         }
       }
       // Sync terminal settings from other windows
-      if (e.key === STORAGE_KEY_TERM_SETTINGS && e.newValue) {
-        try {
-          const newSettings = JSON.parse(e.newValue) as TerminalSettings;
-          setTerminalSettings(prev => ({ ...DEFAULT_TERMINAL_SETTINGS, ...newSettings }));
-        } catch {
-          // ignore parse errors
-        }
-      }
+	      if (e.key === STORAGE_KEY_TERM_SETTINGS && e.newValue) {
+	        try {
+	          const newSettings = JSON.parse(e.newValue) as TerminalSettings;
+	          setTerminalSettings(_prev => ({ ...DEFAULT_TERMINAL_SETTINGS, ...newSettings }));
+	        } catch {
+	          // ignore parse errors
+	        }
+	      }
       // Sync terminal theme from other windows
       if (e.key === STORAGE_KEY_TERM_THEME && e.newValue) {
         if (e.newValue !== terminalThemeId) {

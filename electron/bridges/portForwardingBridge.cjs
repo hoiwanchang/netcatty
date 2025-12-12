@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Port Forwarding Bridge - Handles SSH port forwarding tunnels
  * Extracted from main.cjs for single responsibility
  */

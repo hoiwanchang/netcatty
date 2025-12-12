@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Terminal Bridge - Handles local shell and telnet/mosh sessions
  * Extracted from main.cjs for single responsibility
  */

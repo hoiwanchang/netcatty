@@ -20,6 +20,16 @@ export const localStorageAdapter = {
   writeString(key: string, value: string) {
     localStorage.setItem(key, value);
   },
+  readBoolean(key: string): boolean | null {
+    const value = localStorage.getItem(key);
+    if (value === null) return null;
+    if (value === "true") return true;
+    if (value === "false") return false;
+    return null;
+  },
+  writeBoolean(key: string, value: boolean) {
+    localStorage.setItem(key, value ? "true" : "false");
+  },
   readNumber(key: string): number | null {
     const value = localStorage.getItem(key);
     if (!value) return null;

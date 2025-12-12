@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SSH Bridge - Handles SSH connections, sessions, and related operations
  * Extracted from main.cjs for single responsibility
  */
