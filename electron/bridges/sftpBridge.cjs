@@ -52,6 +52,7 @@ async function openSftp(event, options) {
         credentialId: options.credentialId,
         rpId: options.rpId,
         userVerification: options.userVerification,
+        keySource: options.keySource,
       },
     });
     connectOpts.agent = authAgent;

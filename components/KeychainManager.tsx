@@ -19,6 +19,7 @@ import { logger } from "../lib/logger";
 import { cn } from "../lib/utils";
 import { Host, Identity, KeyType, SSHKey } from "../types";
 import { useKeychainBackend } from "../application/state/useKeychainBackend";
+import { useWebAuthnBackend } from "../application/state/useWebAuthnBackend";
 import SelectHostPanel from "./SelectHostPanel";
 import { AsidePanel, AsidePanelContent } from "./ui/aside-panel";
 import { Button } from "./ui/button";
@@ -80,6 +81,7 @@ const KeychainManager: React.FC<KeychainManagerProps> = ({
   onCreateGroup,
 }) => {
   const { generateKeyPair, execCommand } = useKeychainBackend();
+  const { hasBrowserWebAuthn, createCredentialInBrowser } = useWebAuthnBackend();
   const [activeFilter, setActiveFilter] = useState<FilterTab>("key");
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -373,8 +375,18 @@ echo $3 >> "$FILE"`);
     setIsGenerating(true);
 
     try {
-      // Use WebAuthn directly - works with app:// custom protocol (secure context)
-      const result = await createBiometricCredential(draftKey.label.trim());
+      // Use WebAuthn (macOS may use a browser fallback to reliably show Touch ID prompt)
+      const result = await createBiometricCredential(
+        draftKey.label.trim(),
+        createCredentialInBrowser,
+        // Callback when browser fallback is triggered
+        () => {
+          toast.info(
+            "A browser window will open to complete Touch ID. Finish the prompt there, then return to Netcatty.",
+            "Touch ID",
+          );
+        },
+      );
 
       if (!result) {
         throw new Error("Credential creation was cancelled");
@@ -405,7 +417,15 @@ echo $3 >> "$FILE"`);
     } finally {
       setIsGenerating(false);
     }
-  }, [draftKey, onSave, closePanel, showError]);
+  }, [
+    draftKey,
+    isMac,
+    hasBrowserWebAuthn,
+    createCredentialInBrowser,
+    onSave,
+    closePanel,
+    showError,
+  ]);
 
   // Handle FIDO2 hardware key registration
   const handleGenerateFido2 = useCallback(async () => {

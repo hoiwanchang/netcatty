@@ -243,6 +243,7 @@ class NetcattyAgent extends BaseAgent {
           rpId,
           challenge: bufferToBase64Url(challenge),
           userVerification: userVerification || "preferred",
+          keySource: this._meta?.keySource,
         });
 
         const origin = assertion?.origin || "";

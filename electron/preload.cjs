@@ -415,6 +415,12 @@ const api = {
   
   // Open URL in default browser
   openExternal: (url) => ipcRenderer.invoke("netcatty:openExternal", url),
+
+  // WebAuthn browser fallback (primarily for macOS Touch ID prompt issues)
+  webauthnCreateCredentialInBrowser: (options) =>
+    ipcRenderer.invoke("netcatty:webauthn:browser:create", options),
+  webauthnGetAssertionInBrowser: (options) =>
+    ipcRenderer.invoke("netcatty:webauthn:browser:get", options),
   
   // Port Forwarding API
   startPortForward: async (options) => {

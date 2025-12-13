@@ -60,6 +60,42 @@ interface NetcattySSHOptions {
   jumpHosts?: NetcattyJumpHost[];
 }
 
+interface WebAuthnBrowserCreateOptions {
+  rpId: string;
+  name: string;
+  displayName: string;
+  authenticatorAttachment?: 'platform' | 'cross-platform';
+  userVerification?: 'required' | 'preferred' | 'discouraged';
+  timeoutMs?: number;
+}
+
+interface WebAuthnBrowserCreateResult {
+  rpId: string;
+  origin: string;
+  credentialId: string; // base64url
+  attestationObject: string; // base64url
+  clientDataJSON: string; // base64url
+  publicKeySpki: string; // base64url (may be empty)
+}
+
+interface WebAuthnBrowserGetOptions {
+  rpId: string;
+  credentialId: string; // base64url
+  challenge: string; // base64url
+  userVerification?: 'required' | 'preferred' | 'discouraged';
+  timeoutMs?: number;
+}
+
+interface WebAuthnBrowserGetResult {
+  rpId: string;
+  origin: string;
+  credentialId: string; // base64url
+  authenticatorData: string; // base64url
+  clientDataJSON: string; // base64url
+  signature: string; // base64url
+  userHandle: string | null; // base64url
+}
+
 interface SftpStatResult {
   name: string;
   type: 'file' | 'directory' | 'symlink';
@@ -240,6 +276,10 @@ interface NetcattyBridge {
   
   // Open URL in default browser
   openExternal?(url: string): Promise<void>;
+
+  // WebAuthn browser fallback helpers
+  webauthnCreateCredentialInBrowser?(options: WebAuthnBrowserCreateOptions): Promise<WebAuthnBrowserCreateResult>;
+  webauthnGetAssertionInBrowser?(options: WebAuthnBrowserGetOptions): Promise<WebAuthnBrowserGetResult>;
   
   // Chain progress listener for jump host connections
   // Callback receives: (currentHop: number, totalHops: number, hostLabel: string, status: string)

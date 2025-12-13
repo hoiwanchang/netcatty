@@ -66,6 +66,7 @@ const localFsBridge = require("./bridges/localFsBridge.cjs");
 const transferBridge = require("./bridges/transferBridge.cjs");
 const portForwardingBridge = require("./bridges/portForwardingBridge.cjs");
 const terminalBridge = require("./bridges/terminalBridge.cjs");
+const webauthnBrowserBridge = require("./bridges/webauthnBrowserBridge.cjs");
 const windowManager = require("./bridges/windowManager.cjs");
 
 // GPU settings
@@ -191,6 +192,7 @@ const registerBridges = (win) => {
   transferBridge.registerHandlers(ipcMain);
   portForwardingBridge.registerHandlers(ipcMain);
   terminalBridge.registerHandlers(ipcMain);
+  webauthnBrowserBridge.registerHandlers(ipcMain);
 
   // Settings window handler
   ipcMain.handle("netcatty:settings:open", async () => {
@@ -363,6 +365,11 @@ app.on("will-quit", () => {
     windowManager.shutdownProductionStaticServer?.();
   } catch (err) {
     console.warn("Error during static server shutdown:", err);
+  }
+  try {
+    webauthnBrowserBridge.shutdown?.();
+  } catch (err) {
+    console.warn("Error during WebAuthn helper shutdown:", err);
   }
 });
 

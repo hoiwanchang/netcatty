@@ -22,6 +22,16 @@ const bytesToBase64Url = (bytes: Uint8Array): string => {
     return bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 };
 
+const base64UrlToBytes = (b64url: string): Uint8Array => {
+    if (typeof b64url !== 'string' || !b64url) return new Uint8Array();
+    const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const bin = atob(padded);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+};
+
 const writeSshString = (value: string | Uint8Array): Uint8Array => {
     const bytes = typeof value === 'string' ? textEncoder.encode(value) : value;
     const out = new Uint8Array(4 + bytes.length);
@@ -41,6 +51,10 @@ const concatBytes = (...parts: Uint8Array[]): Uint8Array => {
     }
     return out;
 };
+
+type BrowserCreateCredentialFn = NonNullable<
+    NetcattyBridge['webauthnCreateCredentialInBrowser']
+>;
 
 const getRpIdFromLocation = (): string => {
     const hostname = window.location.hostname;
@@ -307,7 +321,11 @@ export const createFido2Credential = async (label: string): Promise<{
 /**
  * Create biometric credential (Windows Hello / Touch ID)
  */
-export const createBiometricCredential = async (label: string): Promise<{
+export const createBiometricCredential = async (
+    label: string,
+    createCredentialInBrowser?: BrowserCreateCredentialFn,
+    onBrowserFallback?: () => void,
+): Promise<{
     credentialId: string;
     publicKey: string;
     rpId: string;
@@ -334,6 +352,61 @@ export const createBiometricCredential = async (label: string): Promise<{
                 });
 
         const rpId = getRpIdFromLocation();
+
+        // Helper to use browser fallback for WebAuthn
+        const tryBrowserFallback = async (): Promise<{
+            credentialId: string;
+            publicKey: string;
+            rpId: string;
+        } | null> => {
+            if (typeof createCredentialInBrowser !== 'function') {
+                return null;
+            }
+            logger.info('Using browser WebAuthn helper for biometric credential', {
+                rpId,
+                origin: window.location.origin,
+                isSecureContext: window.isSecureContext,
+                label,
+            });
+
+            const result = await createCredentialInBrowser({
+                rpId,
+                name: label,
+                displayName: label,
+                authenticatorAttachment: 'platform',
+                userVerification: 'required',
+                timeoutMs: 180000,
+            });
+
+            if (!result?.credentialId || !result?.attestationObject) {
+                throw new Error('WebAuthn browser flow returned no credential');
+            }
+
+            const rawIdBytes = base64UrlToBytes(result.credentialId);
+            const attestationObjectBytes = base64UrlToBytes(result.attestationObject);
+            const clientDataJSONBytes = base64UrlToBytes(result.clientDataJSON);
+            const spkiBytes = base64UrlToBytes(result.publicKeySpki);
+
+            const credential = {
+                rawId: rawIdBytes.buffer,
+                response: {
+                    attestationObject: attestationObjectBytes.buffer,
+                    clientDataJSON: clientDataJSONBytes.buffer,
+                    getPublicKey:
+                        spkiBytes.byteLength > 0 ? () => spkiBytes.buffer : undefined,
+                },
+            } as unknown as PublicKeyCredential;
+
+            const credentialId = result.credentialId;
+            const rawP256 = await extractRawP256PublicKey(credential);
+            const publicKey = buildOpenSshSkEcdsaPublicKey(rawP256, rpId, `${label}@biometric`);
+
+            return {
+                credentialId,
+                publicKey,
+                rpId,
+            };
+        };
 
         // Best-effort focus/gesture diagnostics. WebAuthn UI can hang if the window isn't focused
         // or if the transient user activation is lost.
@@ -386,7 +459,7 @@ export const createBiometricCredential = async (label: string): Promise<{
         const abortController = new AbortController();
         const abortTimer = window.setTimeout(() => {
             abortController.abort();
-        }, 20000);
+        }, 185000);
         try {
             credential = await navigator.credentials.create({
                 publicKey: {
@@ -417,10 +490,10 @@ export const createBiometricCredential = async (label: string): Promise<{
             }) as PublicKeyCredential;
         } catch (error) {
             const platformAvailable = await platformAvailablePromise;
-            const isMacOS =
+            const isMacOS_ =
                 navigator.platform.toLowerCase().includes('mac') ||
                 navigator.userAgent.toLowerCase().includes('mac');
-            const deviceName = isMacOS ? 'Touch ID' : 'Windows Hello';
+            const deviceName = isMacOS_ ? 'Touch ID' : 'Windows Hello';
             const errName =
                 error && typeof error === 'object' && 'name' in error
                     ? String((error as { name?: unknown }).name)
@@ -454,6 +527,20 @@ export const createBiometricCredential = async (label: string): Promise<{
             if (errName === 'SecurityError') {
                 throw new Error(
                     'WebAuthn blocked by security policy. Ensure the app runs in a secure context and the RP ID is valid for this origin.',
+                );
+            }
+            // AbortError on macOS usually means Touch ID prompt didn't appear (unsigned app).
+            // Try browser fallback if available.
+            if (errName === 'AbortError' && isMacOS_ && typeof createCredentialInBrowser === 'function') {
+                logger.info('AbortError detected, falling back to browser WebAuthn helper');
+                // Notify caller that we're using browser fallback
+                onBrowserFallback?.();
+                const fallbackResult = await tryBrowserFallback();
+                if (fallbackResult) {
+                    return fallbackResult;
+                }
+                throw new Error(
+                    `${deviceName} prompt did not appear. This is usually a macOS/Electron runtime limitation (e.g. unsigned/unpackaged app). Try running a packaged build (electron-builder) and ensure ${deviceName} is enabled in System Settings.`,
                 );
             }
             if (errName === 'AbortError') {

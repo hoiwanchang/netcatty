@@ -345,6 +345,7 @@ async function startSSHSession(event, options) {
           credentialId: options.credentialId,
           rpId: options.rpId,
           userVerification: options.userVerification,
+          keySource: options.keySource,
         },
       });
       connectOpts.agent = authAgent;
@@ -665,6 +666,7 @@ async function execCommand(event, payload) {
           credentialId: payload.credentialId,
           rpId: payload.rpId,
           userVerification: payload.userVerification,
+          keySource: payload.keySource,
         },
       });
       connectOpts.agent = authAgent;

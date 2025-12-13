@@ -5,6 +5,8 @@
  * from the renderer via preload, and await the result.
  */
 
+const { getAssertionInBrowser } = require("./webauthnBrowserBridge.cjs");
+
 let handlersRegistered = false;
 
 // requestId -> { resolve, reject, timeout }
@@ -33,6 +35,28 @@ function registerHandlers(ipcMain) {
 }
 
 function requestWebAuthnAssertion(webContents, params) {
+  // macOS: Electron's embedded WebAuthn prompt can hang (no Touch ID UI). For biometric keys,
+  // use the system browser helper flow instead.
+  if (process.platform === "darwin" && params?.keySource === "biometric") {
+    const timeoutMs = Math.max(1000, params?.timeoutMs || 180000);
+    return getAssertionInBrowser({
+      rpId: params?.rpId,
+      credentialId: params?.credentialId,
+      challenge: params?.challenge,
+      userVerification: params?.userVerification || "preferred",
+      timeoutMs,
+    }).then((result) => {
+      if (!result) throw new Error("WebAuthn assertion was cancelled");
+      return {
+        origin: result.origin,
+        authenticatorData: result.authenticatorData,
+        clientDataJSON: result.clientDataJSON,
+        signature: result.signature,
+        userHandle: result.userHandle,
+      };
+    });
+  }
+
   const requestId = `webauthn-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   return new Promise((resolve, reject) => {
@@ -62,4 +86,3 @@ module.exports = {
   registerHandlers,
   requestWebAuthnAssertion,
 };
-
