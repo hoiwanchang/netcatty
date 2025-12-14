@@ -48,12 +48,12 @@ interface LogViewWrapperProps {
 const LogViewWrapper: React.FC<LogViewWrapperProps> = ({ logView, terminalTheme, fontSize, onClose }) => {
   const activeTabId = useActiveTabId();
   const isVisible = activeTabId === logView.id;
-  
+
   // Use same pattern as VaultViewContainer for visibility
   const containerStyle: React.CSSProperties = isVisible
     ? {}
     : { visibility: 'hidden', pointerEvents: 'none', position: 'absolute', zIndex: -1 };
-  
+
   return (
     <div className={cn("absolute inset-0", isVisible ? "z-20" : "")} style={containerStyle}>
       <LogView
@@ -488,23 +488,23 @@ function App() {
       console.log('[handleTerminalDataCapture] No session found');
       return;
     }
-    
+
     console.log('[handleTerminalDataCapture] Looking for logs with hostname:', session.hostname);
     console.log('[handleTerminalDataCapture] All logs:', connectionLogs.map(l => ({ id: l.id, hostname: l.hostname, endTime: l.endTime, hasTerminalData: !!l.terminalData })));
-    
+
     // Find the most recent log matching this session's hostname and doesn't have terminalData yet
     // For local terminal, hostname is 'localhost'
     // Sort by startTime descending to find the most recent matching log
     const matchingLog = connectionLogs
-      .filter(log => 
-        log.hostname === session.hostname && 
-        !log.endTime && 
+      .filter(log =>
+        log.hostname === session.hostname &&
+        !log.endTime &&
         !log.terminalData
       )
       .sort((a, b) => b.startTime - a.startTime)[0];
-    
+
     console.log('[handleTerminalDataCapture] Matching log', matchingLog);
-    
+
     if (matchingLog) {
       updateConnectionLog(matchingLog.id, {
         endTime: Date.now(),
