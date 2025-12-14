@@ -419,8 +419,6 @@ echo $3 >> "$FILE"`);
     }
   }, [
     draftKey,
-    isMac,
-    hasBrowserWebAuthn,
     createCredentialInBrowser,
     onSave,
     closePanel,

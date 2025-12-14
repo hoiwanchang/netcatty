@@ -583,4 +583,6 @@ export interface ConnectionLog {
   localHostname: string; // Local machine hostname
   saved: boolean; // Whether this log is bookmarked/saved
   terminalData?: string; // Captured terminal output data for replay
+  themeId?: string; // Terminal theme ID for this log view
+  fontSize?: number; // Terminal font size for this log view
 }

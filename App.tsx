@@ -6,7 +6,7 @@ import { useVaultState } from './application/state/useVaultState';
 import { useWindowControls } from './application/state/useWindowControls';
 import { matchesKeyBinding } from './domain/models';
 import { netcattyBridge } from './infrastructure/services/netcattyBridge';
-import LogView from './components/LogView';
+import LogView from './components/LogView.tsx';
 import ProtocolSelectDialog from './components/ProtocolSelectDialog';
 import { QuickSwitcher } from './components/QuickSwitcher';
 import SettingsDialog from './components/SettingsDialog';
@@ -20,7 +20,7 @@ import { Label } from './components/ui/label';
 import { ToastProvider } from './components/ui/toast';
 import { VaultView, VaultSection } from './components/VaultView';
 import { cn } from './lib/utils';
-import { Host, HostProtocol, TerminalTheme } from './types';
+import { ConnectionLog, Host, HostProtocol, TerminalTheme } from './types';
 import { LogView as LogViewType } from './application/state/useSessionState';
 
 // Visibility container for VaultView - isolates isActive subscription
@@ -40,12 +40,13 @@ const VaultViewContainer: React.FC<{ children: React.ReactNode }> = ({ children 
 // LogView wrapper - manages visibility based on active tab
 interface LogViewWrapperProps {
   logView: LogViewType;
-  terminalTheme: TerminalTheme;
-  fontSize: number;
+  defaultTerminalTheme: TerminalTheme;
+  defaultFontSize: number;
   onClose: () => void;
+  onUpdateLog: (logId: string, updates: Partial<ConnectionLog>) => void;
 }
 
-const LogViewWrapper: React.FC<LogViewWrapperProps> = ({ logView, terminalTheme, fontSize, onClose }) => {
+const LogViewWrapper: React.FC<LogViewWrapperProps> = ({ logView, defaultTerminalTheme, defaultFontSize, onClose, onUpdateLog }) => {
   const activeTabId = useActiveTabId();
   const isVisible = activeTabId === logView.id;
 
@@ -58,10 +59,11 @@ const LogViewWrapper: React.FC<LogViewWrapperProps> = ({ logView, terminalTheme,
     <div className={cn("absolute inset-0", isVisible ? "z-20" : "")} style={containerStyle}>
       <LogView
         log={logView.log}
-        terminalTheme={terminalTheme}
-        fontSize={fontSize}
+        defaultTerminalTheme={defaultTerminalTheme}
+        defaultFontSize={defaultFontSize}
         isVisible={isVisible}
         onClose={onClose}
+        onUpdateLog={onUpdateLog}
       />
     </div>
   );
@@ -672,15 +674,20 @@ function App() {
         />
 
         {/* Log Views - readonly terminal replays */}
-        {logViews.map(logView => (
-          <LogViewWrapper
-            key={logView.id}
-            logView={logView}
-            terminalTheme={currentTerminalTheme}
-            fontSize={terminalFontSize}
-            onClose={() => closeLogView(logView.id)}
-          />
-        ))}
+        {logViews.map(logView => {
+          // Get the latest log data from connectionLogs to reflect updates
+          const latestLog = connectionLogs.find(l => l.id === logView.connectionLogId) || logView.log;
+          return (
+            <LogViewWrapper
+              key={logView.id}
+              logView={{ ...logView, log: latestLog }}
+              defaultTerminalTheme={currentTerminalTheme}
+              defaultFontSize={terminalFontSize}
+              onClose={() => closeLogView(logView.id)}
+              onUpdateLog={updateConnectionLog}
+            />
+          );
+        })}
       </div>
 
       <QuickSwitcher

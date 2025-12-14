@@ -1,10 +1,8 @@
 import {
   ArrowRight,
   ChevronDown,
-  Clock,
   FolderOpen,
   Import,
-  Key,
   LayoutGrid,
   List as ListIcon,
   RefreshCw,
@@ -51,7 +49,7 @@ interface KnownHostsManagerProps {
 type ViewMode = "grid" | "list";
 
 // Helper functions outside component for stable references
-const formatDateFn = (timestamp: number) => {
+const _formatDateFn = (timestamp: number) => {
   return new Date(timestamp).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
@@ -59,7 +57,7 @@ const formatDateFn = (timestamp: number) => {
   });
 };
 
-const getKeyTypeColorFn = (keyType: string) => {
+const _getKeyTypeColorFn = (keyType: string) => {
   switch (keyType.toLowerCase()) {
     case "ssh-ed25519":
       return "text-emerald-500";
