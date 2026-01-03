@@ -322,6 +322,17 @@ export interface KeywordHighlightRule {
   enabled: boolean;
 }
 
+// LLM Configuration
+export interface LLMConfig {
+  enabled: boolean;
+  provider: 'gemini' | 'openai' | 'custom';
+  apiKey: string;
+  model: string;
+  endpoint?: string; // For custom providers
+  autoSuggestOnError: boolean; // Auto-suggest fixes for command errors
+  zebraStripingEnabled: boolean; // Enable alternating background colors for commands
+}
+
 export interface TerminalSettings {
   // Rendering
   scrollback: number; // Number of lines kept in buffer
@@ -356,6 +367,9 @@ export interface TerminalSettings {
   // Keyword Highlighting
   keywordHighlightEnabled: boolean;
   keywordHighlightRules: KeywordHighlightRule[];
+
+  // LLM Integration
+  llmConfig?: LLMConfig;
 }
 
 export const DEFAULT_KEYWORD_HIGHLIGHT_RULES: KeywordHighlightRule[] = [
@@ -366,6 +380,26 @@ export const DEFAULT_KEYWORD_HIGHLIGHT_RULES: KeywordHighlightRule[] = [
   { id: 'debug', label: 'Debug', patterns: ['\\[debug\\]', '\\[trace\\]', '\\[verbose\\]', '\\bdebug\\b', '\\btrace\\b', '\\bverbose\\b'], color: '#A78BFA', enabled: true },
   { id: 'ip-mac', label: 'IP address & MAC', patterns: ['\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b', '\\b([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\\b'], color: '#EC4899', enabled: true },
 ];
+
+// LLM Configuration
+export interface LLMConfig {
+  enabled: boolean;
+  provider: 'gemini' | 'openai' | 'custom';
+  apiKey: string;
+  model: string;
+  endpoint?: string; // For custom providers
+  autoSuggestOnError: boolean; // Auto-suggest fixes for command errors
+  zebraStripingEnabled: boolean; // Enable alternating background colors for commands
+}
+
+export const DEFAULT_LLM_CONFIG: LLMConfig = {
+  enabled: false,
+  provider: 'gemini',
+  apiKey: '',
+  model: 'gemini-pro',
+  autoSuggestOnError: true,
+  zebraStripingEnabled: true,
+};
 
 export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   scrollback: 10000,
@@ -388,6 +422,7 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   linkModifier: 'none',
   keywordHighlightEnabled: true,
   keywordHighlightRules: DEFAULT_KEYWORD_HIGHLIGHT_RULES,
+  llmConfig: DEFAULT_LLM_CONFIG,
 };
 
 export interface TerminalTheme {
