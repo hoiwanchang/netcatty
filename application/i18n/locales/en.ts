@@ -155,6 +155,15 @@ const en: Messages = {
   'settings.terminal.scrollback.rows': 'Number of rows *',
   'settings.terminal.keywordHighlight.title': 'Keyword highlighting',
   'settings.terminal.keywordHighlight.resetColors': 'Reset to default colors',
+  
+  // LLM Integration
+  'settings.terminal.section.llm': 'AI Assistant',
+  'settings.terminal.llm.title': 'Enable AI Assistant',
+  'settings.terminal.llm.provider': 'Provider',
+  'settings.terminal.llm.model': 'Model',
+  'settings.terminal.llm.apiKey': 'API Key',
+  'settings.terminal.llm.autoSuggestOnError': 'Auto-suggest fixes for errors',
+  'settings.terminal.llm.zebraStriping': 'Zebra striping (alternating command backgrounds)',
 
   // Settings > Shortcuts
   'settings.shortcuts.section.scheme': 'Hotkey Scheme',
