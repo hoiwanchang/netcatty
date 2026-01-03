@@ -281,3 +281,37 @@ body {
 .workspace-pane:focus-within::after {
   opacity: 1;
 }
+
+/* Terminal Command Zebra Striping */
+.terminal-command-block {
+  position: relative;
+  display: block;
+}
+
+.terminal-command-block.zebra-even {
+  background-color: hsl(var(--muted) / 0.03);
+}
+
+.terminal-command-block.zebra-odd {
+  background-color: hsl(var(--muted) / 0.06);
+}
+
+.dark .terminal-command-block.zebra-even {
+  background-color: hsl(var(--muted) / 0.02);
+}
+
+.dark .terminal-command-block.zebra-odd {
+  background-color: hsl(var(--muted) / 0.04);
+}
+
+/* LLM Chat Indicator */
+.llm-chat-indicator {
+  display: inline-block;
+  margin-right: 0.5ch;
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+.llm-processing {
+  animation: pulse-glow 1s ease-in-out infinite;
+}
