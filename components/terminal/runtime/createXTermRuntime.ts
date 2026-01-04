@@ -397,6 +397,22 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
   term.onData((data) => {
     const id = ctx.sessionRef.current;
     if (id) {
+      // Check if command starts with # for LLM chat
+      const isLLMCommand = ctx.commandBufferRef.current.trim().startsWith('#');
+      
+      if ((data === "\r" || data === "\n") && isLLMCommand) {
+        // Handle LLM chat command - prevent it from being sent to terminal
+        const prompt = ctx.commandBufferRef.current.trim().substring(1); // Remove # prefix
+        if (prompt && ctx.onCommandExecuted) {
+          // Call with a special marker to indicate this is an LLM command
+          ctx.onCommandExecuted(`#${prompt}`, ctx.host.id, ctx.host.label, ctx.sessionId);
+        }
+        ctx.commandBufferRef.current = "";
+        // Clear the command line in terminal
+        term.write('\r\x1b[K');
+        return; // Don't send to session
+      }
+
       ctx.terminalBackend.writeToSession(id, data);
 
       if (ctx.isBroadcastEnabledRef.current && ctx.onBroadcastInputRef.current) {

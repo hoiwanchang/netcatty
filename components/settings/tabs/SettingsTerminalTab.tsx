@@ -443,6 +443,109 @@ export default function SettingsTerminalTab(props: {
           </div>
         )}
       </div>
+
+      {/* LLM Integration Settings */}
+      <SectionHeader title={t("settings.terminal.section.llm")} />
+      <div className="rounded-lg border bg-card p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">{t("settings.terminal.llm.title")}</span>
+          <Toggle
+            checked={terminalSettings.llmConfig?.enabled ?? false}
+            onChange={(enabled) =>
+              updateTerminalSetting("llmConfig", {
+                ...terminalSettings.llmConfig,
+                enabled,
+                provider: terminalSettings.llmConfig?.provider ?? 'gemini',
+                apiKey: terminalSettings.llmConfig?.apiKey ?? '',
+                model: terminalSettings.llmConfig?.model ?? 'gemini-pro',
+                autoSuggestOnError: terminalSettings.llmConfig?.autoSuggestOnError ?? true,
+                zebraStripingEnabled: terminalSettings.llmConfig?.zebraStripingEnabled ?? true,
+              })
+            }
+          />
+        </div>
+        
+        {terminalSettings.llmConfig?.enabled && (
+          <div className="space-y-3 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("settings.terminal.llm.provider")}</Label>
+              <select
+                value={terminalSettings.llmConfig.provider}
+                onChange={(e) =>
+                  updateTerminalSetting("llmConfig", {
+                    ...terminalSettings.llmConfig!,
+                    provider: e.target.value as 'gemini' | 'openai' | 'custom',
+                  })
+                }
+                className="w-full px-3 py-2 text-sm rounded-md border bg-background"
+              >
+                <option value="gemini">Google Gemini</option>
+                <option value="openai" disabled>OpenAI (Coming Soon)</option>
+                <option value="custom" disabled>Custom (Coming Soon)</option>
+              </select>
+            </div>
+            
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("settings.terminal.llm.model")}</Label>
+              <Input
+                value={terminalSettings.llmConfig.model}
+                onChange={(e) =>
+                  updateTerminalSetting("llmConfig", {
+                    ...terminalSettings.llmConfig!,
+                    model: e.target.value,
+                  })
+                }
+                placeholder="gemini-pro"
+                className="w-full text-sm"
+              />
+            </div>
+            
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("settings.terminal.llm.apiKey")}</Label>
+              <Input
+                type="password"
+                value={terminalSettings.llmConfig.apiKey}
+                onChange={(e) =>
+                  updateTerminalSetting("llmConfig", {
+                    ...terminalSettings.llmConfig!,
+                    apiKey: e.target.value,
+                  })
+                }
+                placeholder="AIza..."
+                className="w-full font-mono text-xs"
+              />
+            </div>
+            
+            <div className="space-y-3 pt-2 border-t">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">{t("settings.terminal.llm.autoSuggestOnError")}</Label>
+                <Toggle
+                  checked={terminalSettings.llmConfig.autoSuggestOnError}
+                  onChange={(autoSuggestOnError) =>
+                    updateTerminalSetting("llmConfig", {
+                      ...terminalSettings.llmConfig!,
+                      autoSuggestOnError,
+                    })
+                  }
+                />
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">{t("settings.terminal.llm.zebraStriping")}</Label>
+                <Toggle
+                  checked={terminalSettings.llmConfig.zebraStripingEnabled}
+                  onChange={(zebraStripingEnabled) =>
+                    updateTerminalSetting("llmConfig", {
+                      ...terminalSettings.llmConfig!,
+                      zebraStripingEnabled,
+                    })
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </SettingsTabContent>
   );
 }

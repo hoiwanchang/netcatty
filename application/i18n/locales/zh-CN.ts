@@ -709,6 +709,15 @@ const zhCN: Messages = {
   'settings.terminal.scrollback.rows': '行数 *',
   'settings.terminal.keywordHighlight.title': '关键字高亮',
   'settings.terminal.keywordHighlight.resetColors': '重置为默认颜色',
+  
+  // LLM Integration
+  'settings.terminal.section.llm': 'AI 助手',
+  'settings.terminal.llm.title': '启用 AI 助手',
+  'settings.terminal.llm.provider': '服务提供商',
+  'settings.terminal.llm.model': '模型',
+  'settings.terminal.llm.apiKey': 'API 密钥',
+  'settings.terminal.llm.autoSuggestOnError': '命令错误时自动建议修复',
+  'settings.terminal.llm.zebraStriping': '斑马条纹（交替显示命令背景色）',
 
   // Settings > Shortcuts
   'settings.shortcuts.section.scheme': '快捷键方案',

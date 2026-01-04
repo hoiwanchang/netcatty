@@ -39,6 +39,7 @@ import { XTERM_PERFORMANCE_CONFIG } from "../infrastructure/config/xtermPerforma
 import { useTerminalSearch } from "./terminal/hooks/useTerminalSearch";
 import { useTerminalContextActions } from "./terminal/hooks/useTerminalContextActions";
 import { useTerminalAuthState } from "./terminal/hooks/useTerminalAuthState";
+import { useLLMIntegration } from "./terminal/hooks/useLLMIntegration";
 
 interface TerminalProps {
   host: Host;
@@ -198,6 +199,50 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     handleCloseSearch,
   } = terminalSearch;
 
+  // LLM Integration
+  const llmIntegration = useLLMIntegration(terminalSettings?.llmConfig);
+  const {
+    suggestions: llmSuggestions,
+    isProcessing: isLLMProcessing,
+    handleLLMChat,
+  } = llmIntegration;
+
+  // Wrap onCommandExecuted to handle LLM commands
+  const handleCommandExecuted = async (
+    command: string,
+    hostId: string,
+    hostLabel: string,
+    sessionId: string,
+  ) => {
+    // Check if it's an LLM command (starts with #)
+    if (command.startsWith('#')) {
+      const prompt = command.substring(1).trim();
+      if (prompt && termRef.current) {
+        // Show loading indicator
+        termRef.current.writeln(`\r\n\x1b[36m🤖 AI is thinking...\x1b[0m`);
+        
+        // Call LLM
+        const response = await handleLLMChat(prompt);
+        
+        if (response.error) {
+          termRef.current.writeln(`\r\n\x1b[31m❌ Error: ${response.error}\x1b[0m`);
+        } else {
+          // Display response in terminal
+          termRef.current.writeln(`\r\n\x1b[32m✨ AI Response:\x1b[0m`);
+          const lines = response.text.split('\n');
+          lines.forEach(line => {
+            termRef.current?.writeln(`\x1b[90m│\x1b[0m ${line}`);
+          });
+          termRef.current.writeln('');
+        }
+      }
+      return; // Don't call the original handler for LLM commands
+    }
+    
+    // For non-LLM commands, call the original handler
+    onCommandExecuted?.(command, hostId, hostLabel, sessionId);
+  };
+
   useEffect(() => {
     if (!error) {
       lastToastedErrorRef.current = null;
@@ -301,7 +346,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     onSessionExit,
     onTerminalDataCapture,
     onOsDetected,
-    onCommandExecuted,
+    onCommandExecuted: handleCommandExecuted,
   });
   sessionStartersRef.current = sessionStarters;
 
@@ -333,7 +378,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           onBroadcastInputRef,
           sessionId,
           statusRef,
-          onCommandExecuted,
+          onCommandExecuted: handleCommandExecuted,
           commandBufferRef,
           setIsSearchOpen,
         });
