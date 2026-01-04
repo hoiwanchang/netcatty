@@ -120,6 +120,9 @@ const attachSessionToTerminal = (
 
   ctx.disposeDataRef.current = ctx.terminalBackend.onSessionData(id, (chunk) => {
     term.write(ctx.highlightProcessorRef.current(chunk));
+    if (ctx.terminalSettings?.scrollOnOutput) {
+      term.scrollToBottom();
+    }
     if (!ctx.hasConnectedRef.current) {
       ctx.updateStatus("connected");
       opts?.onConnected?.();

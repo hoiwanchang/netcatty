@@ -63,6 +63,7 @@ export type CreateXTermRuntimeContext = {
 
   sessionId: string;
   statusRef: RefObject<TerminalSession["status"]>;
+  onCommandStart?: () => void;
   onCommandExecuted?: (
     command: string,
     hostId: string,
@@ -70,6 +71,7 @@ export type CreateXTermRuntimeContext = {
     sessionId: string,
   ) => void;
   commandBufferRef: RefObject<string>;
+  isSensitiveInputRef?: RefObject<boolean>;
   setIsSearchOpen: Dispatch<SetStateAction<boolean>>;
 };
 
@@ -397,6 +399,7 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
   term.onData((data) => {
     const id = ctx.sessionRef.current;
     if (id) {
+      const isSensitive = Boolean(ctx.isSensitiveInputRef?.current);
       // Check if command starts with # for LLM chat
       const isLLMCommand = ctx.commandBufferRef.current.trim().startsWith('#');
       
@@ -415,11 +418,18 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
 
       ctx.terminalBackend.writeToSession(id, data);
 
+      const liveSettings = ctx.terminalSettingsRef.current;
+      if (liveSettings?.scrollOnPaste && data.length > 1 && !data.startsWith("\x1b")) {
+        term.scrollToBottom();
+      } else if (liveSettings?.scrollOnKeyPress && data.length === 1) {
+        term.scrollToBottom();
+      }
+
       if (ctx.isBroadcastEnabledRef.current && ctx.onBroadcastInputRef.current) {
         ctx.onBroadcastInputRef.current(data, ctx.sessionId);
       }
 
-      if (ctx.statusRef.current === "connected" && ctx.onCommandExecuted) {
+      if (ctx.statusRef.current === "connected" && ctx.onCommandExecuted && !isSensitive) {
         if (data === "\r" || data === "\n") {
           const cmd = ctx.commandBufferRef.current.trim();
           if (cmd) ctx.onCommandExecuted(cmd, ctx.host.id, ctx.host.label, ctx.sessionId);
@@ -431,9 +441,26 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
         } else if (data === "\x15") {
           ctx.commandBufferRef.current = "";
         } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
+          if (ctx.commandBufferRef.current.length === 0) {
+            ctx.onCommandStart?.();
+          }
           ctx.commandBufferRef.current += data;
         } else if (data.length > 1 && !data.startsWith("\x1b")) {
+          if (ctx.commandBufferRef.current.length === 0) {
+            ctx.onCommandStart?.();
+          }
           ctx.commandBufferRef.current += data;
+        }
+      }
+
+      // Sensitive input handling: never track characters; exit mode on Enter.
+      if (ctx.statusRef.current === "connected" && isSensitive) {
+        if (data === "\r" || data === "\n") {
+          ctx.commandBufferRef.current = "";
+          if (ctx.isSensitiveInputRef) ctx.isSensitiveInputRef.current = false;
+        } else if (data === "\x03") {
+          ctx.commandBufferRef.current = "";
+          if (ctx.isSensitiveInputRef) ctx.isSensitiveInputRef.current = false;
         }
       }
     }

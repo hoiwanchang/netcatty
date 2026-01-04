@@ -43,9 +43,9 @@ export const useLLMIntegration = (llmConfig?: LLMConfig) => {
     }
   }, [llmConfig?.enabled]);
 
-  const suggestCommandFix = useCallback(async (command: string, errorOutput: string) => {
+  const suggestCommandFix = useCallback(async (command: string, errorOutput: string): Promise<LLMResponse | null> => {
     if (!llmConfig?.enabled || !llmConfig?.autoSuggestOnError) {
-      return;
+      return null;
     }
 
     setIsProcessing(true);
@@ -61,6 +61,7 @@ export const useLLMIntegration = (llmConfig?: LLMConfig) => {
         };
         setSuggestions(prev => [...prev, newSuggestion]);
       }
+      return response;
     } finally {
       setIsProcessing(false);
     }

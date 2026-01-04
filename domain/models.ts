@@ -325,12 +325,24 @@ export interface KeywordHighlightRule {
 // LLM Configuration
 export interface LLMConfig {
   enabled: boolean;
-  provider: 'gemini' | 'openai' | 'custom';
+  provider: 'gemini' | 'openai' | 'custom' | 'claude';
   apiKey: string;
   model: string;
   endpoint?: string; // For custom providers
   autoSuggestOnError: boolean; // Auto-suggest fixes for command errors
   zebraStripingEnabled: boolean; // Enable alternating background colors for commands
+  zebraStripeColors?: string[]; // Optional list of hex colors used cyclically for zebra blocks
+}
+
+export interface ServerStatusSettings {
+  // Font size (px) for the compact status string shown next to host label.
+  fontSize: number;
+  // Poll interval for fetching server status.
+  refreshIntervalMs: number;
+  // Segment colors (HSL tokens: "<h> <s>% <l>%").
+  cpuColor: string;
+  memColor: string;
+  diskColor: string;
 }
 
 export interface TerminalSettings {
@@ -356,6 +368,9 @@ export interface TerminalSettings {
   // Keyboard
   altAsMeta: boolean; // Use ⌥ as the Meta key
   scrollOnInput: boolean; // Scroll terminal to bottom on input
+  scrollOnOutput: boolean; // Scroll terminal to bottom on output
+  scrollOnKeyPress: boolean; // Scroll terminal to bottom on key press
+  scrollOnPaste: boolean; // Scroll terminal to bottom on paste
 
   // Mouse
   rightClickBehavior: RightClickBehavior;
@@ -370,6 +385,9 @@ export interface TerminalSettings {
 
   // LLM Integration
   llmConfig?: LLMConfig;
+
+  // Server status (CPU/MEM/DISK) shown in the terminal toolbar
+  serverStatus?: ServerStatusSettings;
 }
 
 export const DEFAULT_KEYWORD_HIGHLIGHT_RULES: KeywordHighlightRule[] = [
@@ -381,24 +399,22 @@ export const DEFAULT_KEYWORD_HIGHLIGHT_RULES: KeywordHighlightRule[] = [
   { id: 'ip-mac', label: 'IP address & MAC', patterns: ['\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b', '\\b([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\\b'], color: '#EC4899', enabled: true },
 ];
 
-// LLM Configuration
-export interface LLMConfig {
-  enabled: boolean;
-  provider: 'gemini' | 'openai' | 'custom';
-  apiKey: string;
-  model: string;
-  endpoint?: string; // For custom providers
-  autoSuggestOnError: boolean; // Auto-suggest fixes for command errors
-  zebraStripingEnabled: boolean; // Enable alternating background colors for commands
-}
-
 export const DEFAULT_LLM_CONFIG: LLMConfig = {
   enabled: false,
   provider: 'gemini',
   apiKey: '',
-  model: 'gemini-pro',
+  model: 'gemini-2.5-flash',
   autoSuggestOnError: true,
   zebraStripingEnabled: true,
+};
+
+export const DEFAULT_SERVER_STATUS_SETTINGS: ServerStatusSettings = {
+  fontSize: 10,
+  refreshIntervalMs: 30_000,
+  // Defaults requested: cyan / yellow / green
+  cpuColor: '189 94% 43%',
+  memColor: '48 96% 53%',
+  diskColor: '142.1 76.2% 36.3%',
 };
 
 export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
@@ -415,6 +431,9 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   minimumContrastRatio: 1,
   altAsMeta: false,
   scrollOnInput: true,
+  scrollOnOutput: false,
+  scrollOnKeyPress: false,
+  scrollOnPaste: false,
   rightClickBehavior: 'context-menu',
   copyOnSelect: false,
   middleClickPaste: true,
@@ -423,6 +442,7 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   keywordHighlightEnabled: true,
   keywordHighlightRules: DEFAULT_KEYWORD_HIGHLIGHT_RULES,
   llmConfig: DEFAULT_LLM_CONFIG,
+  serverStatus: DEFAULT_SERVER_STATUS_SETTINGS,
 };
 
 export interface TerminalTheme {

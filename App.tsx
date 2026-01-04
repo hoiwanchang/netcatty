@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { activeTabStore, useActiveTabId, useIsSftpActive, useIsTerminalLayerVisible, useIsVaultActive } from './application/state/activeTabStore';
 import { useAutoSync } from './application/state/useAutoSync';
+import { useActiveSessionServerStatus } from './application/state/useActiveSessionServerStatus';
 import { useSessionState } from './application/state/useSessionState';
 import { useSettingsState } from './application/state/useSettingsState';
 import { useVaultState } from './application/state/useVaultState';
@@ -155,6 +156,7 @@ function App({ settings }: { settings: SettingsState }) {
     terminalFontSize,
     setTerminalFontSize,
     terminalSettings,
+    updateTerminalSetting,
     hotkeyScheme,
     keyBindings,
     isHotkeyRecording,
@@ -241,6 +243,9 @@ function App({ settings }: { settings: SettingsState }) {
     customGroups,
     portForwardingRules: undefined, // TODO: Add port forwarding rules from usePortForwardingState
     knownHosts,
+    settings: {
+      llmConfig: terminalSettings.llmConfig,
+    },
     onApplyPayload: (payload) => {
       importDataFromString(JSON.stringify({
         hosts: payload.hosts,
@@ -249,6 +254,10 @@ function App({ settings }: { settings: SettingsState }) {
         snippets: payload.snippets,
         customGroups: payload.customGroups,
       }));
+
+      if (payload.settings?.llmConfig) {
+        updateTerminalSetting("llmConfig", payload.settings.llmConfig);
+      }
     },
   });
 
@@ -700,6 +709,17 @@ function App({ settings }: { settings: SettingsState }) {
     setDraggingSessionId(null);
   }, [setDraggingSessionId]);
 
+  const activeTabId = useActiveTabId();
+
+  const activeSessionStatus = useActiveSessionServerStatus({
+    activeTabId,
+    sessions,
+    hosts,
+    keys,
+    identities,
+    terminalSettings,
+  });
+
   return (
     <div className="flex flex-col h-screen text-foreground font-sans netcatty-shell" onContextMenu={(e) => e.preventDefault()}>
       <TopTabs
@@ -772,6 +792,7 @@ function App({ settings }: { settings: SettingsState }) {
           workspaces={workspaces}
           knownHosts={knownHosts}
           draggingSessionId={draggingSessionId}
+          activeSessionStatus={activeSessionStatus}
           terminalTheme={currentTerminalTheme}
           terminalSettings={terminalSettings}
           terminalFontFamilyId={terminalFontFamilyId}

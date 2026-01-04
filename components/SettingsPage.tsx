@@ -30,6 +30,8 @@ const SettingsSyncTabWithVault: React.FC = () => {
         clearVaultData,
     } = useVaultState();
 
+    const { terminalSettings, updateTerminalSetting } = useSettingsState();
+
     return (
         <SettingsSyncTab
             hosts={hosts}
@@ -38,6 +40,8 @@ const SettingsSyncTabWithVault: React.FC = () => {
             snippets={snippets}
             importDataFromString={importDataFromString}
             clearVaultData={clearVaultData}
+            terminalSettings={terminalSettings}
+            updateTerminalSetting={updateTerminalSetting}
         />
     );
 };
@@ -145,6 +149,9 @@ const SettingsPageContent: React.FC<{ settings: SettingsState }> = ({ settings }
                             setUiLanguage={settings.setUiLanguage}
                             customCSS={settings.customCSS}
                             setCustomCSS={settings.setCustomCSS}
+                            terminalThemeId={settings.terminalThemeId}
+                            terminalSettings={settings.terminalSettings}
+                            updateTerminalSetting={settings.updateTerminalSetting}
                         />
                     )}
 

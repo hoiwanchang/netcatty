@@ -454,7 +454,7 @@ const KnownHostsManager: React.FC<KnownHostsManagerProps> = ({
   ]);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="relative h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border/50 bg-secondary/50">
         <div className="flex-1 min-w-0 flex items-center gap-2">

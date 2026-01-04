@@ -457,7 +457,8 @@ export default function SettingsTerminalTab(props: {
                 enabled,
                 provider: terminalSettings.llmConfig?.provider ?? 'gemini',
                 apiKey: terminalSettings.llmConfig?.apiKey ?? '',
-                model: terminalSettings.llmConfig?.model ?? 'gemini-pro',
+                model: terminalSettings.llmConfig?.model ?? 'gemini-2.5-flash',
+                endpoint: terminalSettings.llmConfig?.endpoint,
                 autoSuggestOnError: terminalSettings.llmConfig?.autoSuggestOnError ?? true,
                 zebraStripingEnabled: terminalSettings.llmConfig?.zebraStripingEnabled ?? true,
               })
@@ -474,16 +475,38 @@ export default function SettingsTerminalTab(props: {
                 onChange={(e) =>
                   updateTerminalSetting("llmConfig", {
                     ...terminalSettings.llmConfig!,
-                    provider: e.target.value as 'gemini' | 'openai' | 'custom',
+                    provider: e.target.value as 'gemini' | 'openai' | 'custom' | 'claude',
                   })
                 }
                 className="w-full px-3 py-2 text-sm rounded-md border bg-background"
               >
                 <option value="gemini">Google Gemini</option>
+                <option value="claude">Anthropic Claude</option>
+                <option value="custom">Custom API</option>
                 <option value="openai" disabled>OpenAI (Coming Soon)</option>
-                <option value="custom" disabled>Custom (Coming Soon)</option>
               </select>
             </div>
+
+            {(terminalSettings.llmConfig.provider === 'custom' || terminalSettings.llmConfig.provider === 'claude') && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Endpoint</Label>
+                <Input
+                  value={terminalSettings.llmConfig.endpoint ?? ''}
+                  onChange={(e) =>
+                    updateTerminalSetting('llmConfig', {
+                      ...terminalSettings.llmConfig!,
+                      endpoint: e.target.value,
+                    })
+                  }
+                  placeholder={
+                    terminalSettings.llmConfig.provider === 'claude'
+                      ? 'https://api.anthropic.com/v1/messages'
+                      : 'https://example.com/v1/chat/completions'
+                  }
+                  className="w-full text-sm"
+                />
+              </div>
+            )}
             
             <div className="space-y-1.5">
               <Label className="text-xs">{t("settings.terminal.llm.model")}</Label>
@@ -495,7 +518,7 @@ export default function SettingsTerminalTab(props: {
                     model: e.target.value,
                   })
                 }
-                placeholder="gemini-pro"
+                placeholder="gemini-2.5-flash"
                 className="w-full text-sm"
               />
             </div>
@@ -525,19 +548,6 @@ export default function SettingsTerminalTab(props: {
                     updateTerminalSetting("llmConfig", {
                       ...terminalSettings.llmConfig!,
                       autoSuggestOnError,
-                    })
-                  }
-                />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">{t("settings.terminal.llm.zebraStriping")}</Label>
-                <Toggle
-                  checked={terminalSettings.llmConfig.zebraStripingEnabled}
-                  onChange={(zebraStripingEnabled) =>
-                    updateTerminalSetting("llmConfig", {
-                      ...terminalSettings.llmConfig!,
-                      zebraStripingEnabled,
                     })
                   }
                 />

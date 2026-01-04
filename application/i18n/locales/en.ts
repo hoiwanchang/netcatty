@@ -3,6 +3,9 @@ export type Messages = Record<string, string>;
 const en: Messages = {
   // Common
   'common.save': 'Save',
+  'common.test': 'Test',
+  'common.testing': 'Testing...',
+  'common.saved': 'Saved',
   'common.cancel': 'Cancel',
   'common.close': 'Close',
   'common.settings': 'Settings',
@@ -85,6 +88,21 @@ const en: Messages = {
   'settings.appearance.themeColor.desc': 'Pick a preset palette for each theme',
   'settings.appearance.themeColor.light': 'Light palette',
   'settings.appearance.themeColor.dark': 'Dark palette',
+  'settings.appearance.zebraBlocks': 'Zebra Blocks',
+  'settings.appearance.zebraBlocks.enable': 'Enable zebra blocks',
+  'settings.appearance.zebraBlocks.enable.desc': 'Use alternating background colors for terminal blocks',
+  'settings.appearance.zebraBlocks.background': 'Background',
+  'settings.appearance.zebraBlocks.add': 'Add background color',
+
+  'settings.appearance.serverStatus': 'Server Status',
+  'settings.appearance.serverStatus.fontSize': 'Status font size',
+  'settings.appearance.serverStatus.fontSize.desc': 'Font size for the CPU/MEM/DISK string shown next to the host label',
+  'settings.appearance.serverStatus.refresh': 'Refresh interval (seconds)',
+  'settings.appearance.serverStatus.refresh.desc': 'How often to fetch server stats for the active SSH tab',
+  'settings.appearance.serverStatus.colors.desc': 'Colors for each segment (CPU/MEM/DISK)',
+  'settings.appearance.serverStatus.cpuColor': 'CPU color',
+  'settings.appearance.serverStatus.memColor': 'Memory color',
+  'settings.appearance.serverStatus.diskColor': 'Disk color',
   'settings.appearance.customCss': 'Custom CSS',
   'settings.appearance.customCss.desc':
     'Add custom CSS to personalize the app appearance. Changes apply immediately.',
@@ -231,6 +249,12 @@ const en: Messages = {
   'vault.nav.portForwarding': 'Port Forwarding',
   'vault.nav.snippets': 'Snippets',
   'vault.nav.knownHosts': 'Known Hosts',
+  'vault.nav.ai': 'AI',
+
+  'ai.test.success': 'LLM call succeeded',
+  'ai.test.rememberSave': "Test succeeded. Don't forget to save.",
+  'ai.test.failedTitle': 'LLM test failed',
+  'ai.test.missingConfig': 'Please enable AI and complete the required settings first.',
   'vault.nav.logs': 'Logs',
 
   'vault.groups.title': 'Groups',

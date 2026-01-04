@@ -124,6 +124,15 @@ const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 // Never treat a packaged app as "dev" even if the user has VITE_DEV_SERVER_URL set globally.
 const isDev = !app.isPackaged && !!devServerUrl;
 const effectiveDevServerUrl = isDev ? devServerUrl : undefined;
+
+// Dev-mode cache isolation (Windows can occasionally deny access to the default Chromium cache path)
+// Use a temp-backed userData directory to prevent GPU/disk-cache failures from breaking renderer loads.
+if (isDev) {
+  const devUserDataDir = path.join(app.getPath("temp"), "netcatty-dev-userData");
+  app.setPath("userData", devUserDataDir);
+  app.commandLine.appendSwitch("disk-cache-dir", path.join(devUserDataDir, "DiskCache"));
+  app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
+}
 const preload = path.join(__dirname, "preload.cjs");
 const isMac = process.platform === "darwin";
 const appIcon = path.join(__dirname, "../public/icon.png");
@@ -420,6 +429,50 @@ const registerBridges = (win) => {
     const { shell } = electronModule;
     if (url && typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
       await shell.openExternal(url);
+    }
+  });
+
+  // LLM network request proxy (avoid CORS/COEP issues in renderer)
+  ipcMain.handle("netcatty:llm:request", async (_event, options) => {
+    try {
+      const url = options?.url;
+      const method = options?.method;
+      const headers = options?.headers;
+      const body = options?.body;
+      const timeoutMs = typeof options?.timeoutMs === "number" ? options.timeoutMs : 30_000;
+
+      if (typeof url !== "string" || !(url.startsWith("http://") || url.startsWith("https://"))) {
+        return { ok: false, status: 0, statusText: "Invalid URL", bodyText: "" };
+      }
+      if (method !== "POST") {
+        return { ok: false, status: 0, statusText: "Invalid method", bodyText: "" };
+      }
+      if (!headers || typeof headers !== "object") {
+        return { ok: false, status: 0, statusText: "Invalid headers", bodyText: "" };
+      }
+      if (typeof body !== "string") {
+        return { ok: false, status: 0, statusText: "Invalid body", bodyText: "" };
+      }
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers,
+          body,
+          signal: controller.signal,
+        });
+        const text = await res.text();
+        const maxLen = 2_000_000;
+        const bodyText = text.length > maxLen ? text.slice(0, maxLen) : text;
+        return { ok: res.ok, status: res.status, statusText: res.statusText, bodyText };
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (err) {
+      const message = err && typeof err === "object" && err.message ? err.message : String(err);
+      return { ok: false, status: 0, statusText: "Request failed", bodyText: message };
     }
   });
 

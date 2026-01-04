@@ -166,6 +166,9 @@ export interface SyncPayload {
     terminalFontSize?: number;
     hotkeyScheme?: string;
     customKeyBindings?: Record<string, { mac?: string; pc?: string }>;
+
+    // Terminal AI + zebra blocks (stored under terminal settings in the app)
+    llmConfig?: import('./models').LLMConfig;
   };
   
   // Sync metadata

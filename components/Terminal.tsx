@@ -4,7 +4,7 @@ import { SerializeAddon } from "@xterm/addon-serialize";
 import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
 import { Maximize2, Radio } from "lucide-react";
-import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../application/i18n/I18nProvider";
 import { logger } from "../lib/logger";
 import { cn } from "../lib/utils";
@@ -40,6 +40,39 @@ import { useTerminalSearch } from "./terminal/hooks/useTerminalSearch";
 import { useTerminalContextActions } from "./terminal/hooks/useTerminalContextActions";
 import { useTerminalAuthState } from "./terminal/hooks/useTerminalAuthState";
 import { useLLMIntegration } from "./terminal/hooks/useLLMIntegration";
+import { DEFAULT_SERVER_STATUS_SETTINGS } from "../domain/models";
+
+const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+  const normalized = hex.trim().replace(/^#/, "");
+  if (normalized.length === 3) {
+    const r = parseInt(normalized[0] + normalized[0], 16);
+    const g = parseInt(normalized[1] + normalized[1], 16);
+    const b = parseInt(normalized[2] + normalized[2], 16);
+    return Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)
+      ? { r, g, b }
+      : null;
+  }
+  if (normalized.length !== 6) return null;
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  return Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)
+    ? { r, g, b }
+    : null;
+};
+
+const mixRgb = (
+  a: { r: number; g: number; b: number },
+  b: { r: number; g: number; b: number },
+  amountB: number,
+) => {
+  const t = Math.min(1, Math.max(0, amountB));
+  return {
+    r: Math.round(a.r * (1 - t) + b.r * t),
+    g: Math.round(a.g * (1 - t) + b.g * t),
+    b: Math.round(a.b * (1 - t) + b.b * t),
+  };
+};
 
 interface TerminalProps {
   host: Host;
@@ -49,6 +82,8 @@ interface TerminalProps {
   allHosts?: Host[];
   knownHosts?: KnownHost[];
   isVisible: boolean;
+  isActiveTab?: boolean;
+  serverStatus?: import('../application/state/useActiveSessionServerStatus').ActiveSessionServerStatus | null;
   inWorkspace?: boolean;
   isResizing?: boolean;
   isFocusMode?: boolean;
@@ -94,6 +129,8 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   allHosts = [],
   knownHosts: _knownHosts = [],
   isVisible,
+  isActiveTab,
+  serverStatus,
   inWorkspace,
   isResizing,
   isFocusMode,
@@ -144,12 +181,6 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   terminalSettingsRef.current = terminalSettings;
 
   const highlightProcessorRef = useRef<(text: string) => string>((t) => t);
-  useEffect(() => {
-    highlightProcessorRef.current = createHighlightProcessor(
-      terminalSettings?.keywordHighlightRules ?? [],
-      terminalSettings?.keywordHighlightEnabled ?? false,
-    );
-  }, [terminalSettings?.keywordHighlightEnabled, terminalSettings?.keywordHighlightRules]);
 
   const hotkeySchemeRef = useRef(hotkeyScheme);
   const keyBindingsRef = useRef(keyBindings);
@@ -164,6 +195,14 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   onBroadcastInputRef.current = onBroadcastInput;
 
   const terminalBackend = useTerminalBackend();
+
+  const effectiveTheme = useMemo(() => {
+    if (host.theme) {
+      const hostTheme = TERMINAL_THEMES.find((t) => t.id === host.theme);
+      if (hostTheme) return hostTheme;
+    }
+    return terminalTheme;
+  }, [host.theme, terminalTheme]);
   const { resizeSession } = terminalBackend;
 
   const [isScriptsOpen, setIsScriptsOpen] = useState(false);
@@ -202,10 +241,340 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   // LLM Integration
   const llmIntegration = useLLMIntegration(terminalSettings?.llmConfig);
   const {
-    suggestions: llmSuggestions,
-    isProcessing: isLLMProcessing,
+    suggestions: _llmSuggestions,
+    isProcessing: _isLLMProcessing,
     handleLLMChat,
   } = llmIntegration;
+
+  const llmBannerPrintedRef = useRef(false);
+  const aiBlockZebraIndexRef = useRef(0);
+  const commandBlockZebraIndexRef = useRef(0);
+  const commandBlockBgSeqRef = useRef<string>("");
+
+  const writeAiBlock = useCallback(
+    (term: XTerm, opts: { prompt: string; response?: string; error?: string }) => {
+      const bgRgb = hexToRgb(effectiveTheme.colors.background) ?? { r: 0, g: 0, b: 0 };
+      const fgRgb = hexToRgb(effectiveTheme.colors.foreground) ?? { r: 220, g: 220, b: 220 };
+
+      const zebraEnabled = terminalSettingsRef.current?.llmConfig?.zebraStripingEnabled ?? false;
+      const zebraIndex = zebraEnabled ? aiBlockZebraIndexRef.current : 0;
+
+      const customStripeColors = terminalSettingsRef.current?.llmConfig?.zebraStripeColors;
+      const stripeList = Array.isArray(customStripeColors)
+        ? customStripeColors
+            .map((c) => (typeof c === "string" ? (c.startsWith("#") ? c : `#${c}`) : ""))
+            .filter((c) => /^#[0-9a-fA-F]{6}$/.test(c))
+        : [];
+      const stripeColor = zebraEnabled && stripeList.length > 0
+        ? hexToRgb(stripeList[zebraIndex % stripeList.length])
+        : null;
+
+      // Derive subtle block backgrounds from the active terminal theme.
+      // Keep the delta small but visible.
+      const baseMix = zebraIndex % 2 === 0 ? 0.08 : 0.14;
+      const blockBg = stripeColor ?? mixRgb(bgRgb, fgRgb, baseMix);
+      const headerBg = mixRgb(blockBg, fgRgb, 0.14);
+
+      const cols = Math.max(term.cols || 80, 40);
+      const pad = (s: string) => {
+        const clean = s.replace(/[\r\n]+/g, " ");
+        if (clean.length >= cols - 2) return clean.slice(0, cols - 2);
+        return clean + " ".repeat(cols - 2 - clean.length);
+      };
+
+      const bg = (rgb: { r: number; g: number; b: number }) => `\x1b[48;2;${rgb.r};${rgb.g};${rgb.b}m`;
+      const fg = (rgb: { r: number; g: number; b: number }) => `\x1b[38;2;${rgb.r};${rgb.g};${rgb.b}m`;
+      const reset = "\x1b[0m";
+
+      const header = ` AI `;
+      const top = "┌" + "─".repeat(cols - 2) + "┐";
+      const bottom = "└" + "─".repeat(cols - 2) + "┘";
+
+      term.writeln("\r\n" + bg(headerBg) + fg(fgRgb) + pad(top) + reset);
+      term.writeln(
+        bg(headerBg) +
+          fg(fgRgb) +
+          pad(`│${header}${" ".repeat(Math.max(0, cols - 2 - header.length))}│`) +
+          reset,
+      );
+      term.writeln(bg(blockBg) + fg(fgRgb) + pad(`│> # ${opts.prompt}`.padEnd(cols - 2, " ") + "│") + reset);
+
+      const bodyTextRaw = opts.error ? `错误：${opts.error}` : opts.response ?? "";
+      // Normalize CRLF so blank lines are preserved and \r never moves the cursor unexpectedly.
+      const bodyText = bodyTextRaw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const bodyLines = bodyText.split("\n");
+      for (const line of bodyLines) {
+        term.writeln(bg(blockBg) + fg(fgRgb) + pad(`│${line}`.padEnd(cols - 2, " ") + "│") + reset);
+      }
+
+      term.writeln(bg(blockBg) + fg(fgRgb) + pad(bottom) + reset);
+    },
+    [effectiveTheme.colors.background, effectiveTheme.colors.foreground],
+  );
+
+  const lastUserCommandRef = useRef<string | null>(null);
+  const lastCommandOutputRef = useRef<string>("");
+  const autoSuggestInFlightRef = useRef(false);
+  const autoSuggestedCommandRef = useRef<string | null>(null);
+  const isSensitiveInputRef = useRef(false);
+
+  const stripAnsi = useCallback((input: string): string => {
+    // Minimal ANSI stripper (avoids regex literals that trigger no-control-regex).
+    let out = "";
+    for (let i = 0; i < input.length; i++) {
+      const code = input.charCodeAt(i);
+      // ESC (0x1b) or CSI (0x9b)
+      if (code === 0x1b || code === 0x9b) {
+        // Consume CSI sequence: ESC [ ... final-byte (0x40-0x7E)
+        if (code === 0x1b && input[i + 1] === "[") {
+          i += 2;
+          while (i < input.length) {
+            const c = input.charCodeAt(i);
+            if (c >= 0x40 && c <= 0x7e) break;
+            i++;
+          }
+        }
+        continue;
+      }
+      out += input[i];
+    }
+    return out;
+  }, []);
+
+  const shouldAutoSuggestFromText = useCallback((text: string): boolean => {
+    const t = text.toLowerCase();
+    return (
+      t.includes("command not found") ||
+      t.includes("no such file or directory") ||
+      t.includes("permission denied") ||
+      t.includes("cannot ") ||
+      t.includes("error:") ||
+      t.includes("failed") ||
+      t.includes("syntax error") ||
+      t.includes("segmentation fault") ||
+      t.includes("core dumped") ||
+      t.includes("invalid option") ||
+      t.includes("unknown option") ||
+      t.includes("unrecognized option") ||
+      t.includes("is not recognized") ||
+      t.includes("parameter cannot be found")
+    );
+  }, []);
+
+  const maybeTriggerAutoSuggest = useCallback(async () => {
+    const config = terminalSettingsRef.current?.llmConfig;
+    if (!config?.enabled || !config.autoSuggestOnError) return;
+    if (autoSuggestInFlightRef.current) return;
+    const cmd = lastUserCommandRef.current;
+    if (!cmd) return;
+    if (autoSuggestedCommandRef.current === cmd) return;
+    const output = lastCommandOutputRef.current;
+    if (!output.trim()) return;
+    if (!shouldAutoSuggestFromText(output)) return;
+
+    autoSuggestInFlightRef.current = true;
+    try {
+      const response = await llmIntegration.suggestCommandFix(cmd, output);
+      if (!response || !termRef.current) return;
+      writeAiBlock(termRef.current, {
+        prompt: `修复建议：${cmd}`,
+        response: response.text,
+        error: response.error,
+      });
+
+      // Important: avoid re-triggering for the same command.
+      autoSuggestedCommandRef.current = cmd;
+      lastUserCommandRef.current = null;
+      lastCommandOutputRef.current = "";
+    } finally {
+      autoSuggestInFlightRef.current = false;
+    }
+  }, [llmIntegration, shouldAutoSuggestFromText, writeAiBlock]);
+
+
+  const applyCommandBlockBgToChunk = useCallback((chunk: string) => {
+    const bg = commandBlockBgSeqRef.current;
+    if (!bg) return chunk;
+
+    const stripAnsiForPrompt = (input: string): string => {
+      let out = "";
+      for (let i = 0; i < input.length; i++) {
+        const code = input.charCodeAt(i);
+        if (code === 0x1b || code === 0x9b) {
+          if (code === 0x1b && input[i + 1] === "[") {
+            i += 2;
+            while (i < input.length) {
+              const c = input.charCodeAt(i);
+              if (c >= 0x40 && c <= 0x7e) break;
+              i++;
+            }
+          }
+          continue;
+        }
+        out += input[i];
+      }
+      return out;
+    };
+
+    const looksLikePromptLine = (visibleLine: string): boolean => {
+      // Keep checks conservative to avoid false positives.
+      // Common bash/zsh: user@host:path$  / user@host:path#
+      // Common Windows: PS ...>  / C:\...>
+      const v = visibleLine.replace(/\s+$/, " ");
+      if (v.length === 0 || v.length > 260) return false;
+      if (/^PS [^\r\n>]{0,240}> $/.test(v)) return true;
+      if (/^[A-Za-z]:\\[^\r\n>]{0,240}> $/.test(v)) return true;
+      if (/^[^\s\r\n]{1,64}@[\w.-]{1,128}:[^\r\n]{0,180}[$#] $/.test(v)) return true;
+      return false;
+    };
+
+    const findPromptLineStart = (input: string): number | null => {
+      let lineStart = 0;
+      for (let i = 0; i <= input.length; i++) {
+        const atEnd = i === input.length;
+        const ch = atEnd ? "" : input[i];
+        if (atEnd || ch === "\n" || ch === "\r") {
+          const lineEnd = i;
+          const rawLine = input.slice(lineStart, lineEnd);
+          const visible = stripAnsiForPrompt(rawLine);
+          if (looksLikePromptLine(visible)) return lineStart;
+
+          if (!atEnd) {
+            if (ch === "\r" && input[i + 1] === "\n") i += 1;
+            lineStart = i + 1;
+          }
+        }
+      }
+      return null;
+    };
+
+    const promptStart = findPromptLineStart(chunk);
+    const chunkBeforePrompt = promptStart == null ? chunk : chunk.slice(0, promptStart);
+    const chunkPromptAndAfter = promptStart == null ? "" : chunk.slice(promptStart);
+
+    // Keep background stable even when output resets attributes.
+    // Also fill the rest of each line so the stripe looks like a block.
+    const stabilized =
+      bg +
+      chunkBeforePrompt
+        .split("\x1b[0m")
+        .join(`\x1b[0m${bg}`)
+        .split("\x1b[m")
+        .join(`\x1b[m${bg}`)
+        .split("\x1b[49m")
+        .join(`\x1b[49m${bg}`);
+
+    // EL (Erase in Line) clears to end-of-line using current attributes.
+    // Insert it before each line break and re-apply bg on the next line.
+    // Important: handle CRLF/LF/CR in a single pass to avoid double-processing.
+    let out = "";
+    for (let i = 0; i < stabilized.length; i++) {
+      const ch = stabilized[i];
+      if (ch === "\r") {
+        if (stabilized[i + 1] === "\n") {
+          out += `\x1b[K\r\n${bg}`;
+          i += 1;
+          continue;
+        }
+        out += `\x1b[K\r${bg}`;
+        continue;
+      }
+      if (ch === "\n") {
+        out += `\x1b[K\n${bg}`;
+        continue;
+      }
+      out += ch;
+    }
+
+    if (promptStart != null) {
+      // Stop striping before the next prompt so it doesn't bleed.
+      commandBlockBgSeqRef.current = "";
+      return out + "\x1b[0m" + chunkPromptAndAfter;
+    }
+
+    return out;
+  }, []);
+
+  const computeCommandBlockBgSeq = useCallback(
+    (index: number) => {
+      const customStripeColors = terminalSettingsRef.current?.llmConfig?.zebraStripeColors;
+      const stripeList = Array.isArray(customStripeColors)
+        ? customStripeColors
+            .map((c) => (typeof c === "string" ? (c.startsWith("#") ? c : `#${c}`) : ""))
+            .filter((c) => /^#[0-9a-fA-F]{6}$/.test(c))
+        : [];
+      if (stripeList.length > 0) {
+        const chosen = hexToRgb(stripeList[index % stripeList.length]);
+        if (chosen) return `\x1b[48;2;${chosen.r};${chosen.g};${chosen.b}m`;
+      }
+      const bgRgb = hexToRgb(effectiveTheme.colors.background);
+      const fgRgb = hexToRgb(effectiveTheme.colors.foreground);
+      if (!bgRgb || !fgRgb) return "";
+      // Make the stripe clearly visible (more contrast than AI block).
+      const ratio = index % 2 === 0 ? 0.16 : 0.28;
+      const mixed = mixRgb(bgRgb, fgRgb, ratio);
+      return `\x1b[48;2;${mixed.r};${mixed.g};${mixed.b}m`;
+    },
+    [effectiveTheme.colors.background, effectiveTheme.colors.foreground],
+  );
+
+  const advanceCommandBlockZebra = useCallback(() => {
+    const zebraEnabled = terminalSettingsRef.current?.llmConfig?.zebraStripingEnabled ?? false;
+    if (!zebraEnabled) {
+      commandBlockBgSeqRef.current = "";
+      return;
+    }
+    const listLen = terminalSettingsRef.current?.llmConfig?.zebraStripeColors?.length ?? 0;
+    const cycle = listLen > 0 ? listLen : 2;
+    commandBlockZebraIndexRef.current = (commandBlockZebraIndexRef.current + 1) % cycle;
+    commandBlockBgSeqRef.current = computeCommandBlockBgSeq(commandBlockZebraIndexRef.current);
+  }, [computeCommandBlockBgSeq]);
+
+  useEffect(() => {
+    const base = createHighlightProcessor(
+      terminalSettings?.keywordHighlightRules ?? [],
+      terminalSettings?.keywordHighlightEnabled ?? false,
+    );
+    highlightProcessorRef.current = (text) => {
+      // Detect password/passphrase prompts (sudo, ssh key passphrase, etc.)
+      // and enter a sensitive input mode so we never treat hidden input as a command.
+      const cleanedForDetection = stripAnsi(text);
+      const lowered = cleanedForDetection.toLowerCase();
+      if (
+        lowered.includes("password:") ||
+        lowered.includes("passphrase") ||
+        lowered.includes("[sudo] password for") ||
+        lowered.includes("enter passphrase")
+      ) {
+        isSensitiveInputRef.current = true;
+        commandBufferRef.current = "";
+        lastUserCommandRef.current = null;
+        lastCommandOutputRef.current = "";
+        autoSuggestedCommandRef.current = null;
+      }
+
+      // Capture output for auto-suggest (best effort, based on output patterns).
+      if (lastUserCommandRef.current && !autoSuggestInFlightRef.current) {
+        if (cleanedForDetection) {
+          const next = (lastCommandOutputRef.current + cleanedForDetection).slice(-12000);
+          lastCommandOutputRef.current = next;
+          // Fire-and-forget; internally guarded.
+          void maybeTriggerAutoSuggest();
+        }
+      }
+      const processed = base(text);
+      const zebraEnabled = terminalSettingsRef.current?.llmConfig?.zebraStripingEnabled ?? false;
+      if (!zebraEnabled) return processed;
+      return applyCommandBlockBgToChunk(processed);
+    };
+  }, [
+    terminalSettings?.keywordHighlightEnabled,
+    terminalSettings?.keywordHighlightRules,
+    applyCommandBlockBgToChunk,
+    maybeTriggerAutoSuggest,
+    stripAnsi,
+  ]);
+
 
   // Wrap onCommandExecuted to handle LLM commands
   const handleCommandExecuted = async (
@@ -214,30 +583,35 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     hostLabel: string,
     sessionId: string,
   ) => {
+    // Never treat hidden/sensitive input as a command.
+    if (isSensitiveInputRef.current) {
+      return;
+    }
     // Check if it's an LLM command (starts with #)
     if (command.startsWith('#')) {
       const prompt = command.substring(1).trim();
       if (prompt && termRef.current) {
-        // Show loading indicator
-        termRef.current.writeln(`\r\n\x1b[36m🤖 AI is thinking...\x1b[0m`);
-        
+        // Alternate block background per AI call (when enabled)
+        if (terminalSettingsRef.current?.llmConfig?.zebraStripingEnabled) {
+          aiBlockZebraIndexRef.current += 1;
+        }
+
         // Call LLM
         const response = await handleLLMChat(prompt);
-        
-        if (response.error) {
-          termRef.current.writeln(`\r\n\x1b[31m❌ Error: ${response.error}\x1b[0m`);
-        } else {
-          // Display response in terminal
-          termRef.current.writeln(`\r\n\x1b[32m✨ AI Response:\x1b[0m`);
-          const lines = response.text.split('\n');
-          lines.forEach(line => {
-            termRef.current?.writeln(`\x1b[90m│\x1b[0m ${line}`);
-          });
-          termRef.current.writeln('');
-        }
+
+        writeAiBlock(termRef.current, {
+          prompt,
+          response: response.text,
+          error: response.error,
+        });
       }
       return; // Don't call the original handler for LLM commands
     }
+
+    // Track last user command for auto-suggest.
+    lastUserCommandRef.current = command;
+    lastCommandOutputRef.current = "";
+    autoSuggestedCommandRef.current = null;
     
     // For non-LLM commands, call the original handler
     onCommandExecuted?.(command, hostId, hostLabel, sessionId);
@@ -270,14 +644,6 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   const [needsHostKeyVerification, setNeedsHostKeyVerification] = useState(false);
   const [pendingHostKeyInfo, setPendingHostKeyInfo] = useState<HostKeyInfo | null>(null);
   const pendingConnectionRef = useRef<(() => void) | null>(null);
-
-  const effectiveTheme = useMemo(() => {
-    if (host.theme) {
-      const hostTheme = TERMINAL_THEMES.find((t) => t.id === host.theme);
-      if (hostTheme) return hostTheme;
-    }
-    return terminalTheme;
-  }, [host.theme, terminalTheme]);
 
   const resolvedChainHosts =
     (host.hostChain?.hostIds
@@ -378,8 +744,10 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           onBroadcastInputRef,
           sessionId,
           statusRef,
+          onCommandStart: advanceCommandBlockZebra,
           onCommandExecuted: handleCommandExecuted,
           commandBufferRef,
+          isSensitiveInputRef,
           setIsSearchOpen,
         });
 
@@ -390,6 +758,16 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         searchAddonRef.current = runtime.searchAddon;
 
         const term = runtime.term;
+
+        if (!llmBannerPrintedRef.current) {
+          llmBannerPrintedRef.current = true;
+          const enabled = terminalSettingsRef.current?.llmConfig?.enabled;
+          term.writeln(
+            enabled
+              ? "\r\n\x1b[36mAI 助手已启用：输入 #你的问题 回车\x1b[0m\r\n"
+              : "\r\n\x1b[90m提示：输入 #你的问题 回车 使用 AI（到 设置 → 终端 → AI 助手 启用/配置）\x1b[0m\r\n",
+          );
+        }
 
         if (host.protocol === "local" || host.hostname === "localhost") {
           setStatus("connecting");
@@ -851,6 +1229,53 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   const _isConnecting = status === "connecting";
   const _hasError = Boolean(error);
 
+  const serverStatusSettings = useMemo(() => {
+    const cfg = terminalSettings?.serverStatus;
+    return {
+      ...DEFAULT_SERVER_STATUS_SETTINGS,
+      ...(cfg ?? {}),
+    };
+  }, [terminalSettings?.serverStatus]);
+
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const toolbarLeftRef = useRef<HTMLDivElement | null>(null);
+  const toolbarRightRef = useRef<HTMLDivElement | null>(null);
+  const [perfLevel, setPerfLevel] = useState<0 | 1 | 2 | 3>(0);
+
+  useEffect(() => {
+    if (!isVisible || !isActiveTab || !serverStatus) {
+      setPerfLevel(0);
+      return;
+    }
+
+    const bar = toolbarRef.current;
+    const left = toolbarLeftRef.current;
+    const right = toolbarRightRef.current;
+    if (!bar || !left || !right) {
+      setPerfLevel(0);
+      return;
+    }
+
+    const compute = () => {
+      const barW = bar.getBoundingClientRect().width;
+      const leftW = left.getBoundingClientRect().width;
+      const rightW = right.getBoundingClientRect().width;
+      const available = Math.max(0, barW - leftW - rightW - 12);
+
+      // Degrade order: disk -> mem -> cpu
+      // Levels: 3=cpu+mem+disk, 2=cpu+mem, 1=cpu, 0=hide
+      const next: 0 | 1 | 2 | 3 = available >= 420 ? 3 : available >= 260 ? 2 : available >= 140 ? 1 : 0;
+      setPerfLevel(next);
+    };
+
+    compute();
+    const ro = new ResizeObserver(() => compute());
+    ro.observe(bar);
+    ro.observe(left);
+    ro.observe(right);
+    return () => ro.disconnect();
+  }, [isVisible, isActiveTab, serverStatus]);
+
   return (
     <TerminalContextMenu
       hasSelection={hasSelection}
@@ -869,6 +1294,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         <div className="absolute left-0 right-0 top-0 z-20 pointer-events-none">
             <div
               className="flex items-center gap-1 px-2 py-0.5 backdrop-blur-md pointer-events-auto min-w-0 border-b-[0.5px]"
+              ref={toolbarRef}
               style={{
                 backgroundColor: effectiveTheme.colors.background,
                 color: effectiveTheme.colors.foreground,
@@ -880,7 +1306,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
               ['--terminal-toolbar-btn-active' as never]: `color-mix(in srgb, ${effectiveTheme.colors.background} 68%, ${effectiveTheme.colors.foreground} 32%)`,
             }}
           >
-            <div className="flex items-center gap-1 text-[11px] font-semibold">
+            <div ref={toolbarLeftRef} className="flex items-center gap-1 text-[11px] font-semibold flex-shrink-0">
               <span className="whitespace-nowrap">{host.label}</span>
               <span
                 className={cn(
@@ -889,8 +1315,45 @@ const TerminalComponent: React.FC<TerminalProps> = ({
                 )}
               />
             </div>
-            <div className="flex-1" />
-            <div className="flex items-center gap-0.5 flex-shrink-0">
+
+            {isActiveTab && serverStatus && perfLevel > 0 ? (
+              <div className="flex-1 min-w-[150px]">
+                <span
+                  className="ml-2 text-muted-foreground whitespace-nowrap truncate block"
+                  style={{ fontSize: serverStatusSettings.fontSize }}
+                >
+                  {serverStatus.snapshot?.error && <span>STAT ERR</span>}
+                  {!serverStatus.snapshot?.error &&
+                    !serverStatus.formatted.cpu &&
+                    !serverStatus.formatted.mem &&
+                    !serverStatus.formatted.disk && <span>STAT …</span>}
+                  {perfLevel >= 1 && serverStatus.formatted.cpu && (
+                    <span style={{ color: `hsl(${serverStatusSettings.cpuColor})` }}>
+                      CPU {serverStatus.formatted.cpu}
+                    </span>
+                  )}
+                  {perfLevel >= 2 && serverStatus.formatted.mem && (
+                    <>
+                      <span className="mx-1">·</span>
+                      <span style={{ color: `hsl(${serverStatusSettings.memColor})` }}>
+                        MEM {serverStatus.formatted.mem}
+                      </span>
+                    </>
+                  )}
+                  {perfLevel >= 3 && serverStatus.formatted.disk && (
+                    <>
+                      <span className="mx-1">·</span>
+                      <span style={{ color: `hsl(${serverStatusSettings.diskColor})` }}>
+                        {serverStatus.formatted.disk}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </div>
+            ) : (
+              <div className="flex-1" />
+            )}
+            <div ref={toolbarRightRef} className="flex items-center gap-0.5 flex-shrink-0">
               {inWorkspace && onToggleBroadcast && (
                   <Button
                     variant="secondary"

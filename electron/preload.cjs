@@ -488,6 +488,9 @@ const api = {
     ipcRenderer.invoke("netcatty:onedrive:drive:downloadSyncFile", options),
   onedriveDeleteSyncFile: (options) =>
     ipcRenderer.invoke("netcatty:onedrive:drive:deleteSyncFile", options),
+
+  // LLM network requests (proxied via main process to avoid CORS)
+  llmRequest: (options) => ipcRenderer.invoke("netcatty:llm:request", options),
 };
 
 // Merge with existing netcatty (if any) to avoid stale objects on hot reload

@@ -146,6 +146,10 @@ interface NetcattyBridge {
     port?: number;
     password?: string;
     privateKey?: string;
+    certificate?: string;
+    passphrase?: string;
+    proxy?: NetcattyProxyConfig;
+    jumpHosts?: NetcattyJumpHost[];
     command: string;
     timeout?: number;
   }): Promise<{ stdout: string; stderr: string; code: number | null }>;
@@ -274,6 +278,15 @@ interface NetcattyBridge {
   
   // Open URL in default browser
   openExternal?(url: string): Promise<void>;
+
+  // LLM network request (proxied via main process to avoid CORS)
+  llmRequest?(options: {
+    url: string;
+    method: 'POST';
+    headers: Record<string, string>;
+    body: string;
+    timeoutMs?: number;
+  }): Promise<{ ok: boolean; status: number; statusText?: string; bodyText: string }>;
 
   // App info (name/version/platform) for About screens
   getAppInfo?(): Promise<{ name: string; version: string; platform: string }>;

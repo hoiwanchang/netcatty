@@ -617,10 +617,18 @@ async function execCommand(event, payload) {
     let stderr = "";
     let settled = false;
     const timeoutMs = payload.timeout || 10000;
+    let chainConnections = [];
+    let connectionSocket = null;
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
-      conn.end();
+      try { conn.end(); } catch {}
+      if (connectionSocket && typeof connectionSocket.destroy === 'function') {
+        try { connectionSocket.destroy(); } catch {}
+      }
+      for (const c of chainConnections) {
+        try { c.end(); } catch {}
+      }
       reject(new Error("SSH exec timeout"));
     }, timeoutMs);
 
@@ -644,7 +652,13 @@ async function execCommand(event, payload) {
               if (settled) return;
               clearTimeout(timer);
               settled = true;
-              conn.end();
+              try { conn.end(); } catch {}
+              if (connectionSocket && typeof connectionSocket.destroy === 'function') {
+                try { connectionSocket.destroy(); } catch {}
+              }
+              for (const c of chainConnections) {
+                try { c.end(); } catch {}
+              }
               resolve({ stdout, stderr, code: code ?? (stderr ? 1 : 0) });
             });
         });
@@ -653,6 +667,12 @@ async function execCommand(event, payload) {
         if (settled) return;
         clearTimeout(timer);
         settled = true;
+        if (connectionSocket && typeof connectionSocket.destroy === 'function') {
+          try { connectionSocket.destroy(); } catch {}
+        }
+        for (const c of chainConnections) {
+          try { c.end(); } catch {}
+        }
         reject(err);
       })
       .on("end", () => {
@@ -660,8 +680,20 @@ async function execCommand(event, payload) {
         clearTimeout(timer);
         settled = true;
         if (stderr || stdout) {
+          if (connectionSocket && typeof connectionSocket.destroy === 'function') {
+            try { connectionSocket.destroy(); } catch {}
+          }
+          for (const c of chainConnections) {
+            try { c.end(); } catch {}
+          }
           resolve({ stdout, stderr, code: 0 });
         } else {
+          if (connectionSocket && typeof connectionSocket.destroy === 'function') {
+            try { connectionSocket.destroy(); } catch {}
+          }
+          for (const c of chainConnections) {
+            try { c.end(); } catch {}
+          }
           reject(new Error("SSH connection closed unexpectedly"));
         }
       });
@@ -676,33 +708,80 @@ async function execCommand(event, payload) {
       keepaliveInterval: 0,
     };
 
-    let authAgent = null;
-    if (hasCertificate) {
-      authAgent = new NetcattyAgent({
-        mode: "certificate",
-        webContents: event.sender,
-        meta: {
-          label: payload.keyId || payload.username || "",
-          certificate: payload.certificate,
-          privateKey: payload.privateKey,
-          passphrase: payload.passphrase,
-        },
-      });
-      connectOpts.agent = authAgent;
-    } else if (payload.privateKey) {
-      connectOpts.privateKey = payload.privateKey;
-      if (payload.passphrase) connectOpts.passphrase = payload.passphrase;
-    }
+    // Handle chain/proxy sockets (reuse same machinery as startSSHSession)
+    const jumpHosts = payload.jumpHosts || [];
+    const hasJumpHosts = Array.isArray(jumpHosts) && jumpHosts.length > 0;
+    const hasProxy = !!payload.proxy;
+    (async () => {
+      try {
+        if (hasJumpHosts) {
+          const chainResult = await connectThroughChain(
+            event,
+            payload,
+            jumpHosts,
+            payload.hostname,
+            payload.port || 22,
+          );
+          connectionSocket = chainResult.socket;
+          chainConnections = chainResult.connections;
+          connectOpts.sock = connectionSocket;
+          delete connectOpts.host;
+          delete connectOpts.port;
+        } else if (hasProxy) {
+          connectionSocket = await createProxySocket(
+            payload.proxy,
+            payload.hostname,
+            payload.port || 22,
+          );
+          connectOpts.sock = connectionSocket;
+          delete connectOpts.host;
+          delete connectOpts.port;
+        }
+      } catch (err) {
+        if (settled) return;
+        clearTimeout(timer);
+        settled = true;
+        try { conn.end(); } catch {}
+        if (connectionSocket && typeof connectionSocket.destroy === 'function') {
+          try { connectionSocket.destroy(); } catch {}
+        }
+        for (const c of chainConnections) {
+          try { c.end(); } catch {}
+        }
+        reject(err);
+        return;
+      }
 
-    if (payload.password) connectOpts.password = payload.password;
+      const effectivePassphrase = payload.passphrase;
 
-    if (authAgent) {
-      const order = ["agent"];
-      if (connectOpts.password) order.push("password");
-      connectOpts.authHandler = order;
-    }
+      let authAgent = null;
+      if (hasCertificate) {
+        authAgent = new NetcattyAgent({
+          mode: "certificate",
+          webContents: event.sender,
+          meta: {
+            label: payload.keyId || payload.username || "",
+            certificate: payload.certificate,
+            privateKey: payload.privateKey,
+            passphrase: effectivePassphrase,
+          },
+        });
+        connectOpts.agent = authAgent;
+      } else if (payload.privateKey) {
+        connectOpts.privateKey = payload.privateKey;
+        if (effectivePassphrase) connectOpts.passphrase = effectivePassphrase;
+      }
 
-    conn.connect(connectOpts);
+      if (payload.password) connectOpts.password = payload.password;
+
+      if (authAgent) {
+        const order = ["agent"];
+        if (connectOpts.password) order.push("password");
+        connectOpts.authHandler = order;
+      }
+
+      conn.connect(connectOpts);
+    })();
   });
 }
 

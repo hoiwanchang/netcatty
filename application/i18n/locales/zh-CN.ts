@@ -3,6 +3,9 @@ import type { Messages } from './en';
 const zhCN: Messages = {
   // Common
   'common.save': '保存',
+  'common.test': '测试',
+  'common.testing': '测试中…',
+  'common.saved': '已保存',
   'common.cancel': '取消',
   'common.close': '关闭',
   'common.settings': '设置',
@@ -73,6 +76,21 @@ const zhCN: Messages = {
   'settings.appearance.themeColor.desc': '为浅色与深色主题选择预设配色',
   'settings.appearance.themeColor.light': '浅色主题',
   'settings.appearance.themeColor.dark': '深色主题',
+  'settings.appearance.zebraBlocks': '斑马纹代码块',
+  'settings.appearance.zebraBlocks.enable': '启用斑马纹代码块',
+  'settings.appearance.zebraBlocks.enable.desc': '为终端的代码块使用循环的背景色条纹',
+  'settings.appearance.zebraBlocks.background': '背景色',
+  'settings.appearance.zebraBlocks.add': '添加背景色',
+
+  'settings.appearance.serverStatus': '服务器状态',
+  'settings.appearance.serverStatus.fontSize': '状态字体大小',
+  'settings.appearance.serverStatus.fontSize.desc': '显示在主机标签旁的 CPU/MEM/DISK 状态串字体大小',
+  'settings.appearance.serverStatus.refresh': '刷新间隔（秒）',
+  'settings.appearance.serverStatus.refresh.desc': '仅对当前活动的 SSH 标签页定时获取状态',
+  'settings.appearance.serverStatus.colors.desc': 'CPU/MEM/DISK 三段文字颜色',
+  'settings.appearance.serverStatus.cpuColor': 'CPU 颜色',
+  'settings.appearance.serverStatus.memColor': '内存颜色',
+  'settings.appearance.serverStatus.diskColor': '磁盘颜色',
   'settings.appearance.customCss': '自定义 CSS',
   'settings.appearance.customCss.desc': '使用自定义 CSS 个性化界面，修改会立即生效。',
   'settings.appearance.customCss.placeholder':
@@ -124,6 +142,12 @@ const zhCN: Messages = {
   'vault.nav.portForwarding': '端口转发',
   'vault.nav.snippets': '代码片段',
   'vault.nav.knownHosts': '已知主机',
+  'vault.nav.ai': 'AI',
+
+  'ai.test.success': '模型调用成功',
+  'ai.test.rememberSave': '测试成功，但尚未保存，请点击“保存修改”。',
+  'ai.test.failedTitle': '模型测试失败',
+  'ai.test.missingConfig': '请先启用 AI 并填写必填配置。',
   'vault.nav.logs': '日志',
 
   'vault.groups.title': '分组',

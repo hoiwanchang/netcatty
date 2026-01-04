@@ -2,6 +2,7 @@ import { Circle, LayoutGrid, Server } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useActiveTabId } from '../application/state/activeTabStore';
 import { useTerminalBackend } from '../application/state/useTerminalBackend';
+import type { ActiveSessionServerStatus } from '../application/state/useActiveSessionServerStatus';
 import { collectSessionIds } from '../domain/workspace';
 import { SplitDirection } from '../domain/workspace';
 import { KeyBinding, TerminalSettings } from '../domain/models';
@@ -39,6 +40,7 @@ interface TerminalLayerProps {
   workspaces: Workspace[];
   knownHosts?: KnownHost[];
   draggingSessionId: string | null;
+  activeSessionStatus?: ActiveSessionServerStatus | null;
   terminalTheme: TerminalTheme;
   terminalSettings?: TerminalSettings;
   terminalFontFamilyId: string;
@@ -77,6 +79,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   workspaces,
   knownHosts = [],
   draggingSessionId,
+  activeSessionStatus,
   terminalTheme,
   terminalSettings,
   terminalFontFamilyId,
@@ -677,6 +680,8 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
                 isResizing={!!resizing}
                 isFocusMode={isFocusMode}
                 isFocused={isFocusedPane}
+                isActiveTab={activeTabId === session.id}
+                serverStatus={activeSessionStatus && activeSessionStatus.sessionId === session.id ? activeSessionStatus : null}
                 fontFamilyId={terminalFontFamilyId}
                 fontSize={fontSize}
                 terminalTheme={terminalTheme}
@@ -773,6 +778,7 @@ const terminalLayerAreEqual = (prev: TerminalLayerProps, next: TerminalLayerProp
     prev.sessions === next.sessions &&
     prev.workspaces === next.workspaces &&
     prev.draggingSessionId === next.draggingSessionId &&
+    prev.activeSessionStatus === next.activeSessionStatus &&
     prev.terminalTheme === next.terminalTheme &&
     prev.terminalSettings === next.terminalSettings &&
     prev.fontSize === next.fontSize &&
