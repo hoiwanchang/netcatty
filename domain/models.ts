@@ -63,7 +63,7 @@ export interface Host {
   tags: string[];
   os: 'linux' | 'windows' | 'macos';
   identityFileId?: string; // Reference to SSHKey
-  protocol?: 'ssh' | 'telnet' | 'local'; // Default/primary protocol
+  protocol?: 'ssh' | 'telnet' | 'local' | 'serial'; // Default/primary protocol
   password?: string;
   authMethod?: 'password' | 'key' | 'certificate';
   agentForwarding?: boolean;
@@ -529,9 +529,10 @@ export interface TerminalSession {
 
 export interface RemoteFile {
   name: string;
-  type: 'file' | 'directory';
+  type: 'file' | 'directory' | 'symlink';
   size: string;
   lastModified: string;
+  linkTarget?: 'file' | 'directory' | null; // For symlinks: the type of the target, or null if broken
 }
 
 export type WorkspaceNode =
@@ -570,6 +571,7 @@ export interface SftpFileEntry {
   permissions?: string;
   owner?: string;
   group?: string;
+  linkTarget?: 'file' | 'directory' | null; // For symlinks: the type of the target, or null if broken
 }
 
 export interface SftpConnection {

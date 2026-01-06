@@ -3,6 +3,7 @@ import {
   ChevronRight,
   Database,
   Download,
+  ExternalLink,
   File,
   FileArchive,
   FileAudio,
@@ -18,6 +19,7 @@ import {
   Key,
   Loader2,
   Lock,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   Settings,
@@ -51,7 +53,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 
 // Comprehensive file icon helper
-const getFileIcon = (fileName: string, isDirectory: boolean) => {
+const getFileIcon = (fileName: string, isDirectory: boolean, isSymlink?: boolean) => {
   if (isDirectory)
     return (
       <Folder
@@ -61,6 +63,11 @@ const getFileIcon = (fileName: string, isDirectory: boolean) => {
         className="text-blue-400"
       />
     );
+
+  // For symlink files (not directories), show a special symlink icon
+  if (isSymlink) {
+    return <ExternalLink size={18} className="text-cyan-500" />;
+  }
 
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
   const iconClass = "text-muted-foreground";
@@ -324,6 +331,9 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
   const [isEditingPath, setIsEditingPath] = useState(false);
   const [editingPathValue, setEditingPathValue] = useState("");
   const pathInputRef = useRef<HTMLInputElement>(null);
+  
+  // Breadcrumb truncation constant
+  const MAX_VISIBLE_BREADCRUMB_PARTS = 4;
 
   const isWindowsPath = useCallback((path: string): boolean => {
     return /^[A-Za-z]:/.test(path);
@@ -871,9 +881,11 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
   // Sorted files
   const sortedFiles = useMemo(() => {
     return [...files].sort((a, b) => {
-      // Directories always first
-      if (a.type === "directory" && b.type !== "directory") return -1;
-      if (a.type !== "directory" && b.type === "directory") return 1;
+      // Directories and symlinks pointing to directories come first
+      const aIsDir = a.type === "directory" || (a.type === "symlink" && a.linkTarget === "directory");
+      const bIsDir = b.type === "directory" || (b.type === "symlink" && b.linkTarget === "directory");
+      if (aIsDir && !bIsDir) return -1;
+      if (!aIsDir && bIsDir) return 1;
 
       let cmp = 0;
       switch (sortField) {
@@ -974,6 +986,35 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
 
   // Breadcrumbs
   const breadcrumbs = getBreadcrumbs(currentPath);
+  
+  // Compute visible/hidden breadcrumbs for truncation (always truncate, no expansion)
+  const { visibleBreadcrumbs, hiddenBreadcrumbs, needsBreadcrumbTruncation } = useMemo(() => {
+    if (breadcrumbs.length <= MAX_VISIBLE_BREADCRUMB_PARTS) {
+      return {
+        visibleBreadcrumbs: breadcrumbs.map((part, idx) => ({ part, originalIndex: idx })),
+        hiddenBreadcrumbs: [] as { part: string; originalIndex: number }[],
+        needsBreadcrumbTruncation: false
+      };
+    }
+
+    // Show first part + ellipsis + last (MAX_VISIBLE_BREADCRUMB_PARTS - 1) parts
+    const firstPart = [{ part: breadcrumbs[0], originalIndex: 0 }];
+    const lastPartsCount = MAX_VISIBLE_BREADCRUMB_PARTS - 1;
+    const lastParts = breadcrumbs.slice(-lastPartsCount).map((part, idx) => ({
+      part,
+      originalIndex: breadcrumbs.length - lastPartsCount + idx
+    }));
+    const hidden = breadcrumbs.slice(1, -lastPartsCount).map((part, idx) => ({
+      part,
+      originalIndex: idx + 1
+    }));
+
+    return {
+      visibleBreadcrumbs: [...firstPart, ...lastParts],
+      hiddenBreadcrumbs: hidden,
+      needsBreadcrumbTruncation: true
+    };
+  }, [breadcrumbs]);
 
   const handleFileClick = (
     file: RemoteFile,
@@ -1037,7 +1078,8 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
   };
 
   const handleFileDoubleClick = (file: RemoteFile) => {
-    if (file.type === "directory") {
+    // Navigate into directories, or symlinks that point to directories
+    if (file.type === "directory" || (file.type === "symlink" && file.linkTarget === "directory")) {
       handleNavigate(joinPath(currentPath, file.name));
     } else {
       handleDownload(file);
@@ -1149,32 +1191,55 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
               <div
                 className="flex items-center gap-1 flex-1 min-w-0 cursor-text hover:bg-secondary/50 rounded px-1 py-0.5 transition-colors"
                 onDoubleClick={handlePathDoubleClick}
-                title={t("sftp.path.doubleClickToEdit")}
+                title={currentPath}
               >
                 <button
-                  className="text-muted-foreground hover:text-foreground px-1"
+                  className="text-muted-foreground hover:text-foreground px-1 shrink-0"
                   onClick={() => setCurrentPath(getRootPath(currentPath))}
                 >
                   {isLocalSession && isWindowsPath(currentPath)
                     ? getWindowsDrive(currentPath) ?? "C:"
                     : "/"}
                 </button>
-                {breadcrumbs.map((part, idx) => (
-                  <React.Fragment key={idx}>
-                    <ChevronRight
-                      size={12}
-                      className="text-muted-foreground flex-shrink-0"
-                    />
-                    <button
-                      className="text-muted-foreground hover:text-foreground truncate px-1"
-                      onClick={() =>
-                        setCurrentPath(breadcrumbPathAt(breadcrumbs, idx))
-                      }
-                    >
-                      {part}
-                    </button>
-                  </React.Fragment>
-                ))}
+                {visibleBreadcrumbs.map(({ part, originalIndex }, displayIdx) => {
+                  const isLast = originalIndex === breadcrumbs.length - 1;
+                  const showEllipsisBefore = needsBreadcrumbTruncation && displayIdx === 1;
+
+                  return (
+                    <React.Fragment key={originalIndex}>
+                      {showEllipsisBefore && (
+                        <>
+                          <ChevronRight
+                            size={12}
+                            className="text-muted-foreground flex-shrink-0"
+                          />
+                          <span
+                            className="text-muted-foreground px-1 shrink-0 flex items-center cursor-default"
+                            title={`${t("sftp.showHiddenPaths")}: ${hiddenBreadcrumbs.map(h => h.part).join(" > ")}`}
+                          >
+                            <MoreHorizontal size={14} />
+                          </span>
+                        </>
+                      )}
+                      <ChevronRight
+                        size={12}
+                        className="text-muted-foreground flex-shrink-0"
+                      />
+                      <button
+                        className={cn(
+                          "text-muted-foreground hover:text-foreground truncate px-1 max-w-[100px]",
+                          isLast && "text-foreground font-medium"
+                        )}
+                        onClick={() =>
+                          setCurrentPath(breadcrumbPathAt(breadcrumbs, originalIndex))
+                        }
+                        title={part}
+                      >
+                        {part}
+                      </button>
+                    </React.Fragment>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1304,7 +1369,12 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
           <ContextMenu>
             <ContextMenuTrigger asChild>
               <div className="divide-y divide-border/30">
-                {sortedFiles.map((file, idx) => (
+                {sortedFiles.map((file, idx) => {
+                  // Check if this entry is navigable like a directory
+                  const isNavigableDirectory = file.type === "directory" || (file.type === "symlink" && file.linkTarget === "directory");
+                  const isDownloadableFile = file.type === "file" || (file.type === "symlink" && file.linkTarget === "file");
+                  
+                  return (
                   <ContextMenu key={idx}>
                     <ContextMenuTrigger>
                       <div
@@ -1321,18 +1391,24 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="shrink-0">
-                            {getFileIcon(file.name, file.type === "directory")}
+                            {getFileIcon(file.name, isNavigableDirectory, file.type === "symlink" && !isNavigableDirectory)}
                           </div>
-                          <span className="truncate font-medium">{file.name}</span>
+                          <span className={cn("truncate font-medium", file.type === "symlink" && "italic")}>
+                            {file.name}
+                            {file.type === "symlink" && <span className="sr-only"> (symbolic link)</span>}
+                          </span>
+                          {file.type === "symlink" && (
+                            <span className="text-xs text-muted-foreground shrink-0" aria-hidden="true">→</span>
+                          )}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {file.type === "directory" ? "--" : formatBytes(file.size)}
+                          {isNavigableDirectory ? "--" : formatBytes(file.size)}
                         </div>
                         <div className="text-xs text-muted-foreground truncate">
                           {formatDate(file.lastModified, resolvedLocale)}
                         </div>
                         <div className="flex items-center justify-end gap-1">
-                          {file.type === "file" && (
+                          {isDownloadableFile && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1362,7 +1438,7 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
                       </div>
                     </ContextMenuTrigger>
                     <ContextMenuContent>
-                      {file.type === "directory" && (
+                      {(file.type === "directory" || (file.type === "symlink" && file.linkTarget === "directory")) && (
                         <ContextMenuItem
                           onClick={() =>
                             handleNavigate(
@@ -1375,7 +1451,7 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
                           {t("sftp.context.open")}
                         </ContextMenuItem>
                       )}
-                      {file.type === "file" && (
+                      {(file.type === "file" || (file.type === "symlink" && file.linkTarget === "file")) && (
                         <ContextMenuItem onClick={() => handleDownload(file)}>
                           <Download size={14} className="mr-2" /> {t("sftp.context.download")}
                         </ContextMenuItem>
@@ -1388,7 +1464,8 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
                       </ContextMenuItem>
                     </ContextMenuContent>
                   </ContextMenu>
-                ))}
+                );
+                })}
               </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
