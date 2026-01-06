@@ -345,6 +345,13 @@ export interface ServerStatusSettings {
   diskColor: string;
 }
 
+export interface CommandCandidatesSettings {
+  // Whether to show command candidates from remote $PATH while typing.
+  enabled: boolean;
+  // How long to keep the cached commands list before refreshing.
+  cacheTtlMs: number;
+}
+
 export interface TerminalSettings {
   // Rendering
   scrollback: number; // Number of lines kept in buffer
@@ -388,6 +395,9 @@ export interface TerminalSettings {
 
   // Server status (CPU/MEM/DISK) shown in the terminal toolbar
   serverStatus?: ServerStatusSettings;
+
+  // Command candidates shown inline while typing (remote $PATH)
+  commandCandidates?: CommandCandidatesSettings;
 }
 
 export const DEFAULT_KEYWORD_HIGHLIGHT_RULES: KeywordHighlightRule[] = [
@@ -417,6 +427,11 @@ export const DEFAULT_SERVER_STATUS_SETTINGS: ServerStatusSettings = {
   diskColor: '142.1 76.2% 36.3%',
 };
 
+export const DEFAULT_COMMAND_CANDIDATES_SETTINGS: CommandCandidatesSettings = {
+  enabled: false,
+  cacheTtlMs: 24 * 60 * 60 * 1000,
+};
+
 export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   scrollback: 10000,
   drawBoldInBrightColors: true,
@@ -443,6 +458,7 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   keywordHighlightRules: DEFAULT_KEYWORD_HIGHLIGHT_RULES,
   llmConfig: DEFAULT_LLM_CONFIG,
   serverStatus: DEFAULT_SERVER_STATUS_SETTINGS,
+  commandCandidates: DEFAULT_COMMAND_CANDIDATES_SETTINGS,
 };
 
 export interface TerminalTheme {

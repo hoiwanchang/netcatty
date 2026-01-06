@@ -103,6 +103,12 @@ const en: Messages = {
   'settings.appearance.serverStatus.cpuColor': 'CPU color',
   'settings.appearance.serverStatus.memColor': 'Memory color',
   'settings.appearance.serverStatus.diskColor': 'Disk color',
+
+  'settings.appearance.commandCandidates': 'Command Candidates',
+  'settings.appearance.commandCandidates.enable': 'Enable command candidates',
+  'settings.appearance.commandCandidates.enable.desc': 'Show executable command candidates from remote $PATH while typing (up to 10). Cached per host and refreshed periodically.',
+  'settings.appearance.commandCandidates.ttl': 'Cache TTL (hours)',
+  'settings.appearance.commandCandidates.ttl.desc': 'After the TTL expires, the list is refreshed once in the background after connecting',
   'settings.appearance.customCss': 'Custom CSS',
   'settings.appearance.customCss.desc':
     'Add custom CSS to personalize the app appearance. Changes apply immediately.',

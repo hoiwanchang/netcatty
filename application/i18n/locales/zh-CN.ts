@@ -91,6 +91,12 @@ const zhCN: Messages = {
   'settings.appearance.serverStatus.cpuColor': 'CPU 颜色',
   'settings.appearance.serverStatus.memColor': '内存颜色',
   'settings.appearance.serverStatus.diskColor': '磁盘颜色',
+
+  'settings.appearance.commandCandidates': '命令候选',
+  'settings.appearance.commandCandidates.enable': '启用命令候选',
+  'settings.appearance.commandCandidates.enable.desc': '输入时从远端 $PATH 提示可执行命令（最多 10 条），会按主机缓存到本地并定期刷新',
+  'settings.appearance.commandCandidates.ttl': '缓存有效期（小时）',
+  'settings.appearance.commandCandidates.ttl.desc': '超过有效期后会在连接成功后后台刷新一次',
   'settings.appearance.customCss': '自定义 CSS',
   'settings.appearance.customCss.desc': '使用自定义 CSS 个性化界面，修改会立即生效。',
   'settings.appearance.customCss.placeholder':

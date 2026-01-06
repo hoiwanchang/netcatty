@@ -71,6 +71,7 @@ export type CreateXTermRuntimeContext = {
     sessionId: string,
   ) => void;
   commandBufferRef: RefObject<string>;
+  onCommandBufferChange?: (buffer: string) => void;
   isSensitiveInputRef?: RefObject<boolean>;
   setIsSearchOpen: Dispatch<SetStateAction<boolean>>;
 };
@@ -411,6 +412,7 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
           ctx.onCommandExecuted(`#${prompt}`, ctx.host.id, ctx.host.label, ctx.sessionId);
         }
         ctx.commandBufferRef.current = "";
+        ctx.onCommandBufferChange?.("");
         // Clear the command line in terminal
         term.write('\r\x1b[K');
         return; // Don't send to session
@@ -434,22 +436,28 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
           const cmd = ctx.commandBufferRef.current.trim();
           if (cmd) ctx.onCommandExecuted(cmd, ctx.host.id, ctx.host.label, ctx.sessionId);
           ctx.commandBufferRef.current = "";
+          ctx.onCommandBufferChange?.(ctx.commandBufferRef.current);
         } else if (data === "\x7f" || data === "\b") {
           ctx.commandBufferRef.current = ctx.commandBufferRef.current.slice(0, -1);
+          ctx.onCommandBufferChange?.(ctx.commandBufferRef.current);
         } else if (data === "\x03") {
           ctx.commandBufferRef.current = "";
+          ctx.onCommandBufferChange?.(ctx.commandBufferRef.current);
         } else if (data === "\x15") {
           ctx.commandBufferRef.current = "";
+          ctx.onCommandBufferChange?.(ctx.commandBufferRef.current);
         } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
           if (ctx.commandBufferRef.current.length === 0) {
             ctx.onCommandStart?.();
           }
           ctx.commandBufferRef.current += data;
+          ctx.onCommandBufferChange?.(ctx.commandBufferRef.current);
         } else if (data.length > 1 && !data.startsWith("\x1b")) {
           if (ctx.commandBufferRef.current.length === 0) {
             ctx.onCommandStart?.();
           }
           ctx.commandBufferRef.current += data;
+          ctx.onCommandBufferChange?.(ctx.commandBufferRef.current);
         }
       }
 
@@ -458,9 +466,11 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
         if (data === "\r" || data === "\n") {
           ctx.commandBufferRef.current = "";
           if (ctx.isSensitiveInputRef) ctx.isSensitiveInputRef.current = false;
+          ctx.onCommandBufferChange?.("");
         } else if (data === "\x03") {
           ctx.commandBufferRef.current = "";
           if (ctx.isSensitiveInputRef) ctx.isSensitiveInputRef.current = false;
+          ctx.onCommandBufferChange?.("");
         }
       }
     }

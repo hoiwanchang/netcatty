@@ -41,6 +41,7 @@ import { useTerminalContextActions } from "./terminal/hooks/useTerminalContextAc
 import { useTerminalAuthState } from "./terminal/hooks/useTerminalAuthState";
 import { useLLMIntegration } from "./terminal/hooks/useLLMIntegration";
 import { DEFAULT_SERVER_STATUS_SETTINGS } from "../domain/models";
+import { useCommandCandidatesCache } from "../application/state/useCommandCandidatesCache";
 
 const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
   const normalized = hex.trim().replace(/^#/, "");
@@ -177,6 +178,19 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   const hasRunStartupCommandRef = useRef(false);
   const commandBufferRef = useRef<string>("");
 
+  const pathCommandsRef = useRef<string[] | null>(null);
+  const pathCommandsFetchedAtRef = useRef<number | null>(null);
+  const pathCommandsLoadingRef = useRef(false);
+  const inlineCandidatesRenderedRef = useRef<string>("");
+
+  const [candidatesPopup, setCandidatesPopup] = useState<{
+    open: boolean;
+    items: string[];
+    left: number;
+    top: number;
+    placement: "below" | "above";
+  }>({ open: false, items: [], left: 0, top: 0, placement: "below" });
+
   const terminalSettingsRef = useRef(terminalSettings);
   terminalSettingsRef.current = terminalSettings;
 
@@ -195,6 +209,18 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   onBroadcastInputRef.current = onBroadcastInput;
 
   const terminalBackend = useTerminalBackend();
+  const commandCandidatesCache = useCommandCandidatesCache();
+
+  const COMMAND_CANDIDATES_CACHE_VERSION = 1;
+
+  const commandCandidatesEnabled = terminalSettings?.commandCandidates?.enabled ?? false;
+
+  const commandCandidatesCacheTtlMs = useMemo(() => {
+    const raw = terminalSettings?.commandCandidates?.cacheTtlMs;
+    const ms = typeof raw === "number" && Number.isFinite(raw) ? raw : 24 * 60 * 60 * 1000;
+    // Clamp: 1h .. 7d
+    return Math.max(60 * 60 * 1000, Math.min(7 * 24 * 60 * 60 * 1000, Math.round(ms)));
+  }, [terminalSettings?.commandCandidates?.cacheTtlMs]);
 
   const effectiveTheme = useMemo(() => {
     if (host.theme) {
@@ -645,16 +671,389 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   const [pendingHostKeyInfo, setPendingHostKeyInfo] = useState<HostKeyInfo | null>(null);
   const pendingConnectionRef = useRef<(() => void) | null>(null);
 
-  const resolvedChainHosts =
-    (host.hostChain?.hostIds
-      ?.map((id) => allHosts.find((h) => h.id === id))
-      .filter(Boolean) as Host[]) || [];
+  const resolvedChainHosts = useMemo(() => {
+    return (
+      (host.hostChain?.hostIds
+        ?.map((id) => allHosts.find((h) => h.id === id))
+        .filter(Boolean) as Host[]) || []
+    );
+  }, [allHosts, host.hostChain?.hostIds]);
+
+  const buildPathCommandsCommand = useCallback((): string => {
+    // Outputs one command name per line, prefixed with a marker line.
+    // Important: remote user shells may be fish/pwsh; force a compatible shell.
+
+    if (host.os === "windows") {
+      // PowerShell: list file names in PATH (strip common executable extensions).
+      // Keep output simple: marker + one name per line.
+      return [
+        "powershell -NoProfile -NonInteractive -Command \"",
+        "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;",
+        "'NCCMDSv1';",
+        "$env:Path -split ';' | Where-Object { $_ -and (Test-Path $_) } | ForEach-Object {",
+        "  Get-ChildItem -File -Force $_ -ErrorAction SilentlyContinue",
+        "} | ForEach-Object {",
+        "  $n=$_.Name; $e=$_.Extension.ToLower();",
+        "  if($e -in '.exe','.cmd','.bat','.ps1'){ [IO.Path]::GetFileNameWithoutExtension($n) } else { $n }",
+        "} | Sort-Object -Unique",
+        "\"",
+      ].join(" ");
+    }
+
+    // POSIX via sh -lc (avoids fish syntax differences).
+    // Prefer shell-native command discovery (much faster than scanning PATH) when possible.
+    // IMPORTANT: join with newlines (not semicolons). Some shells treat `then;` / `do;` as syntax errors.
+    const script = [
+      'printf "NCCMDSv1\\n"',
+      'shell="${SHELL-}"',
+      'if echo "$shell" | grep -qi "bash" && command -v bash >/dev/null 2>&1; then',
+      '  bash -lc "compgen -c" 2>/dev/null',
+      'elif echo "$shell" | grep -qi "zsh" && command -v zsh >/dev/null 2>&1; then',
+      // Escape $ so sh does not expand ${(k)commands}.
+      '  zsh -lc "print -l \\\u0024{(k)commands}" 2>/dev/null',
+      'elif command -v bash >/dev/null 2>&1; then',
+      '  bash -lc "compgen -c" 2>/dev/null',
+      'elif command -v zsh >/dev/null 2>&1; then',
+      '  zsh -lc "print -l \\\u0024{(k)commands}" 2>/dev/null',
+      'else',
+      '  IFS=":"',
+      '  for d in ${PATH-}; do',
+      '    [ -d "$d" ] || continue',
+      '    for f in "$d"/*; do',
+      '      [ -f "$f" ] && [ -x "$f" ] && printf "%s\\n" "${f##*/}"',
+      '    done',
+      '  done',
+      'fi | (',
+      '  if command -v sort >/dev/null 2>&1; then',
+      '    LC_ALL=C sort -u',
+      '  elif command -v awk >/dev/null 2>&1; then',
+      '    awk "NF && !seen[$0]++"',
+      '  else',
+      '    cat',
+      '  fi',
+      ')',
+    ].join("\n");
+    const quoted = script.replace(/'/g, "'\\''");
+    return `sh -lc '${quoted}'`;
+  }, [host.os]);
+
+  const parsePathCommandsOutput = useCallback((combined: string): string[] => {
+    const lines = combined.split(/\r?\n/);
+    const markerIndex = lines.findIndex((l) => l.trim() === "NCCMDSv1");
+    const payload = markerIndex >= 0 ? lines.slice(markerIndex + 1) : lines;
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of payload) {
+      const name = raw.trim();
+      if (!name) continue;
+      // Keep it conservative; we only need executable names.
+      if (!/^[A-Za-z0-9._+-]+$/.test(name)) continue;
+      if (seen.has(name)) continue;
+      seen.add(name);
+      out.push(name);
+    }
+    return out;
+  }, []);
+
+  const computePopupPosition = useCallback(
+    (term: XTerm, itemsCount: number) => {
+      const containerEl = containerRef.current;
+      if (!containerEl) return null;
+
+      const getCellDimensions = () => {
+        const coreDims = (
+          term as unknown as {
+            _core?: {
+              _renderService?: {
+                dimensions?: { actualCellWidth?: number; actualCellHeight?: number };
+              };
+            };
+          }
+        )?._core?._renderService?.dimensions;
+        const cw = Number(coreDims?.actualCellWidth);
+        const ch = Number(coreDims?.actualCellHeight);
+        if (Number.isFinite(cw) && cw > 0 && Number.isFinite(ch) && ch > 0) {
+          return { cw, ch };
+        }
+
+        // Fallback: approximate based on container size.
+        const rect = containerEl.getBoundingClientRect();
+        const approxCw = rect.width / Math.max(1, term.cols);
+        const approxCh = rect.height / Math.max(1, term.rows);
+        return { cw: approxCw, ch: approxCh };
+      };
+
+      const { cw, ch } = getCellDimensions();
+
+      // Coordinates relative to the nearest positioned ancestor (the wrapping relative div).
+      const paddingLeft = parseFloat(getComputedStyle(containerEl).paddingLeft || "0") || 0;
+      const baseLeft = containerEl.offsetLeft + paddingLeft;
+      const baseTop = containerEl.offsetTop;
+
+      const col = term.buffer.active.cursorX;
+      const row = term.buffer.active.cursorY;
+
+      const left = Math.round(baseLeft + col * cw);
+      const rowTop = Math.round(baseTop + row * ch);
+      const belowTop = Math.round(rowTop + ch);
+
+      // Estimate item height (tight list); keep it consistent visually.
+      const itemHeight = 22;
+      const popupHeight = Math.min(10, Math.max(1, itemsCount)) * itemHeight + 10;
+
+      const containerRect = containerEl.getBoundingClientRect();
+      const containerHeight = containerRect.height;
+      const cursorYInContainer = row * ch;
+
+      const wouldOverflowBelow = cursorYInContainer + ch + popupHeight > containerHeight;
+      const placement: "below" | "above" = wouldOverflowBelow ? "above" : "below";
+      const top = placement === "below" ? belowTop : Math.max(baseTop, Math.round(rowTop - popupHeight));
+
+      return { left, top, placement };
+    },
+    [containerRef],
+  );
+
+  const clearInlineCandidates = useCallback(() => {
+    const term = termRef.current;
+    if (!term) return;
+    if (!inlineCandidatesRenderedRef.current) return;
+    // Save cursor, clear to end-of-line, restore cursor.
+    term.write("\x1b[s\x1b[0K\x1b[u");
+    inlineCandidatesRenderedRef.current = "";
+  }, []);
+
+  const renderInlineCandidates = useCallback(
+    (buffer: string) => {
+      const term = termRef.current;
+      if (!term) return;
+
+      // Ensure any previous inline overlay is cleared (older versions used terminal writes).
+      clearInlineCandidates();
+
+      if (!commandCandidatesEnabled) {
+        setCandidatesPopup((s) => (s.open ? { ...s, open: false, items: [] } : s));
+        return;
+      }
+
+      // Don't render anything while in sensitive mode.
+      if (isSensitiveInputRef.current) {
+        setCandidatesPopup((s) => (s.open ? { ...s, open: false, items: [] } : s));
+        return;
+      }
+
+      const trimmed = buffer.trimStart();
+      // Only for command name (first token) and skip LLM-chat mode.
+      if (!trimmed || trimmed.startsWith("#") || /\s/.test(trimmed)) {
+        setCandidatesPopup((s) => (s.open ? { ...s, open: false, items: [] } : s));
+        return;
+      }
+
+      const commands = pathCommandsRef.current;
+      if (!commands || commands.length === 0) {
+        setCandidatesPopup((s) => (s.open ? { ...s, open: false, items: [] } : s));
+        return;
+      }
+
+      const prefix = trimmed;
+      // Avoid damaging line edits: only render if there's no non-space content after cursor.
+      try {
+        const y = term.buffer.active.cursorY;
+        const x = term.buffer.active.cursorX;
+        const line = (term.buffer.active.getLine(y) as unknown as {
+          translateToString?: (trimRight?: boolean, startCol?: number, endCol?: number) => string;
+        } | null);
+        const after = line?.translateToString?.(false, x, term.cols) ?? "";
+        if (after.trim().length > 0) return;
+      } catch {
+        return;
+      }
+
+      const items: string[] = [];
+      for (const cmd of commands) {
+        if (cmd.startsWith(prefix)) {
+          items.push(cmd);
+          if (items.length >= 10) break;
+        }
+      }
+
+      if (items.length === 0) {
+        setCandidatesPopup((s) => (s.open ? { ...s, open: false, items: [] } : s));
+        return;
+      }
+
+      const pos = computePopupPosition(term, items.length);
+      if (!pos) return;
+
+      setCandidatesPopup({ open: true, items, left: pos.left, top: pos.top, placement: pos.placement });
+    },
+    [clearInlineCandidates, commandCandidatesEnabled, computePopupPosition],
+  );
 
   const updateStatus = (next: TerminalSession["status"]) => {
     setStatus(next);
     hasConnectedRef.current = next === "connected";
     onStatusChange?.(sessionId, next);
   };
+
+  useEffect(() => {
+    // Reset state when host changes.
+    pathCommandsRef.current = null;
+    pathCommandsFetchedAtRef.current = null;
+    pathCommandsLoadingRef.current = false;
+    inlineCandidatesRenderedRef.current = "";
+
+    if (!commandCandidatesEnabled) return;
+
+    const cached = commandCandidatesCache.get(host.id);
+    if (cached) {
+      // Load even empty caches so TTL prevents refetch spam and users can inspect error fields.
+      pathCommandsRef.current = cached.commands ?? [];
+      pathCommandsFetchedAtRef.current = cached.fetchedAt;
+    }
+  }, [commandCandidatesCache, commandCandidatesEnabled, host.id]);
+
+  useEffect(() => {
+    if (!commandCandidatesEnabled) {
+      clearInlineCandidates();
+      setCandidatesPopup((s) => (s.open ? { ...s, open: false, items: [] } : s));
+    } else {
+      // If user toggles it on, try to render immediately.
+      renderInlineCandidates(commandBufferRef.current);
+    }
+  }, [clearInlineCandidates, commandCandidatesEnabled, renderInlineCandidates]);
+
+  useEffect(() => {
+    // Fetch PATH commands once per host (best-effort) after connection.
+    if (status !== "connected") return;
+    const protocol = host.protocol || "ssh";
+    if (protocol !== "ssh") return;
+    if (!commandCandidatesEnabled) return;
+    if (!terminalBackend.execAvailable()) return;
+
+    const fetchedAt = pathCommandsFetchedAtRef.current;
+    const isFresh = fetchedAt != null && Date.now() - fetchedAt < commandCandidatesCacheTtlMs;
+    const cachedVersion = commandCandidatesCache.get(host.id)?.version ?? 0;
+    // If we already attempted a fetch recently (even if empty), don't refetch until TTL,
+    // unless the script version changed (e.g. fixing a remote syntax bug).
+    if (isFresh && cachedVersion === COMMAND_CANDIDATES_CACHE_VERSION) return;
+    if (pathCommandsLoadingRef.current) return;
+
+    pathCommandsLoadingRef.current = true;
+    const fetchOnce = async () => {
+      try {
+        const resolvedAuth = resolveHostAuth({ host, keys, identities });
+        const key = resolvedAuth.key;
+
+        const proxy = host.proxyConfig
+          ? {
+              type: host.proxyConfig.type,
+              host: host.proxyConfig.host,
+              port: host.proxyConfig.port,
+              username: host.proxyConfig.username,
+              password: host.proxyConfig.password,
+            }
+          : undefined;
+
+        const jumpHosts = resolvedChainHosts.map((jumpHost) => {
+          const jumpAuth = resolveHostAuth({ host: jumpHost, keys, identities });
+          const jumpKey = jumpAuth.key;
+          return {
+            hostname: jumpHost.hostname,
+            port: jumpHost.port || 22,
+            username: jumpAuth.username || "root",
+            password: jumpAuth.password,
+            privateKey: jumpKey?.privateKey,
+            certificate: jumpKey?.certificate,
+            passphrase: jumpAuth.passphrase,
+            publicKey: jumpKey?.publicKey,
+            keyId: jumpAuth.keyId,
+            keySource: jumpKey?.source,
+            label: jumpHost.label,
+          };
+        });
+
+        const attemptAt = Date.now();
+        const res = await terminalBackend.execCommand({
+          hostname: host.hostname,
+          username: resolvedAuth.username || "root",
+          port: host.port || 22,
+          password: resolvedAuth.password,
+          privateKey: key?.privateKey,
+          certificate: key?.certificate,
+          passphrase: resolvedAuth.passphrase,
+          proxy,
+          jumpHosts: jumpHosts.length ? jumpHosts : undefined,
+          command: buildPathCommandsCommand(),
+          timeout: 25_000,
+        });
+
+        const combined = `${res.stdout || ""}\n${res.stderr || ""}`;
+        const commands = parsePathCommandsOutput(combined);
+        const stderrSnippet = (res.stderr || "").trim().slice(0, 600);
+        const fetchedAtNow = Date.now();
+        pathCommandsRef.current = commands;
+        pathCommandsFetchedAtRef.current = fetchedAtNow;
+        commandCandidatesCache.set(host.id, {
+          fetchedAt: fetchedAtNow,
+          commands,
+          lastAttemptAt: attemptAt,
+          error:
+            commands.length > 0
+              ? undefined
+              : stderrSnippet
+                ? `empty result (stderr: ${stderrSnippet})`
+                : "empty result",
+          strategy: "auto",
+          shell: undefined,
+          version: COMMAND_CANDIDATES_CACHE_VERSION,
+        });
+
+        if (commands.length > 0) {
+          logger.info("[Terminal] PATH commands fetched", { hostId: host.id, count: commands.length });
+        } else {
+          logger.warn("[Terminal] PATH commands empty", {
+            hostId: host.id,
+            os: host.os,
+            stderr: stderrSnippet || undefined,
+          });
+        }
+        // Re-render immediately for current input.
+        renderInlineCandidates(commandBufferRef.current);
+      } catch (err) {
+        const fetchedAtNow = Date.now();
+        pathCommandsRef.current = [];
+        pathCommandsFetchedAtRef.current = fetchedAtNow;
+        commandCandidatesCache.set(host.id, {
+          fetchedAt: fetchedAtNow,
+          commands: [],
+          lastAttemptAt: fetchedAtNow,
+          error: err instanceof Error ? err.message : String(err),
+          strategy: "auto",
+          shell: undefined,
+          version: COMMAND_CANDIDATES_CACHE_VERSION,
+        });
+        logger.debug("[Terminal] Failed to fetch PATH commands", err);
+      } finally {
+        pathCommandsLoadingRef.current = false;
+      }
+    };
+
+    void fetchOnce();
+  }, [
+    status,
+    host,
+    commandCandidatesEnabled,
+    commandCandidatesCache,
+    commandCandidatesCacheTtlMs,
+    keys,
+    identities,
+    resolvedChainHosts,
+    terminalBackend,
+    buildPathCommandsCommand,
+    parsePathCommandsOutput,
+    renderInlineCandidates,
+  ]);
 
   const cleanupSession = () => {
     disposeDataRef.current?.();
@@ -747,6 +1146,11 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           onCommandStart: advanceCommandBlockZebra,
           onCommandExecuted: handleCommandExecuted,
           commandBufferRef,
+          onCommandBufferChange: (buffer) => {
+            // Don't draw before connect; xterm cursor can be unstable.
+            if (statusRef.current !== "connected") return;
+            renderInlineCandidates(buffer);
+          },
           isSensitiveInputRef,
           setIsSearchOpen,
         });
@@ -1420,6 +1824,29 @@ const TerminalComponent: React.FC<TerminalProps> = ({
               backgroundColor: effectiveTheme.colors.background,
             }}
           />
+
+          {commandCandidatesEnabled && candidatesPopup.open && candidatesPopup.items.length > 0 && (
+            <div
+              className="absolute z-20 pointer-events-none"
+              style={{ left: candidatesPopup.left, top: candidatesPopup.top }}
+            >
+              <div className="w-[320px] max-w-[70vw] border border-border/60 bg-background text-foreground rounded-md overflow-hidden shadow-sm">
+                <div className="max-h-[240px] overflow-hidden">
+                  {candidatesPopup.items.map((item, idx) => (
+                    <div
+                      key={item}
+                      className={cn(
+                        "px-2 py-1 text-xs font-mono truncate",
+                        idx === 0 ? "bg-muted text-foreground" : "text-muted-foreground",
+                      )}
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {needsHostKeyVerification && pendingHostKeyInfo && (
             <div className="absolute inset-0 z-30 bg-background">

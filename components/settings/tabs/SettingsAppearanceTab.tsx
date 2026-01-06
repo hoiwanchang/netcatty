@@ -5,7 +5,13 @@ import { DARK_UI_THEMES, LIGHT_UI_THEMES } from "../../../infrastructure/config/
 import { SUPPORTED_UI_LOCALES } from "../../../infrastructure/config/i18n";
 import { TERMINAL_THEMES } from "../../../infrastructure/config/terminalThemes";
 import { cn } from "../../../lib/utils";
-import { DEFAULT_LLM_CONFIG, DEFAULT_SERVER_STATUS_SETTINGS, type LLMConfig, type TerminalSettings } from "../../../domain/models";
+import {
+  DEFAULT_COMMAND_CANDIDATES_SETTINGS,
+  DEFAULT_LLM_CONFIG,
+  DEFAULT_SERVER_STATUS_SETTINGS,
+  type LLMConfig,
+  type TerminalSettings,
+} from "../../../domain/models";
 import { SectionHeader, SettingsTabContent, SettingRow, Toggle, Select } from "../settings-ui";
 import { Button } from "../../ui/button";
 
@@ -57,6 +63,14 @@ export default function SettingsAppearanceTab(props: {
       ...(existing ?? {}),
     };
   }, [terminalSettings.serverStatus]);
+
+  const ensureCommandCandidatesSettings = useCallback(() => {
+    const existing = terminalSettings.commandCandidates;
+    return {
+      ...DEFAULT_COMMAND_CANDIDATES_SETTINGS,
+      ...(existing ?? {}),
+    };
+  }, [terminalSettings.commandCandidates]);
 
   const ensureLlmConfig = useCallback((): LLMConfig => {
     const existing = terminalSettings.llmConfig;
@@ -207,6 +221,18 @@ export default function SettingsAppearanceTab(props: {
   ];
 
   const serverStatusCfg = useMemo(() => ensureServerStatusSettings(), [ensureServerStatusSettings]);
+
+  const commandCandidatesCfg = useMemo(
+    () => ensureCommandCandidatesSettings(),
+    [ensureCommandCandidatesSettings],
+  );
+
+  const updateCommandCandidates = useCallback(
+    (next: Partial<typeof commandCandidatesCfg>) => {
+      updateTerminalSetting("commandCandidates", { ...commandCandidatesCfg, ...next });
+    },
+    [commandCandidatesCfg, updateTerminalSetting],
+  );
 
   const updateServerStatus = useCallback(
     (next: Partial<typeof serverStatusCfg>) => {
@@ -508,6 +534,38 @@ export default function SettingsAppearanceTab(props: {
               </button>
             ))}
           </div>
+        </SettingRow>
+      </div>
+
+      <SectionHeader title={t("settings.appearance.commandCandidates")} />
+      <div className="space-y-0 divide-y divide-border rounded-lg border bg-card px-4">
+        <SettingRow
+          label={t("settings.appearance.commandCandidates.enable")}
+          description={t("settings.appearance.commandCandidates.enable.desc")}
+        >
+          <Toggle
+            checked={commandCandidatesCfg.enabled}
+            onChange={(checked) => updateCommandCandidates({ enabled: checked })}
+          />
+        </SettingRow>
+
+        <SettingRow
+          label={t("settings.appearance.commandCandidates.ttl")}
+          description={t("settings.appearance.commandCandidates.ttl.desc")}
+        >
+          <input
+            type="number"
+            min={1}
+            max={168}
+            value={Math.round(commandCandidatesCfg.cacheTtlMs / 1000 / 60 / 60)}
+            onChange={(e) => {
+              const hours = Number(e.target.value);
+              if (!Number.isFinite(hours)) return;
+              const clamped = Math.max(1, Math.min(168, Math.round(hours)));
+              updateCommandCandidates({ cacheTtlMs: clamped * 60 * 60 * 1000 });
+            }}
+            className="h-9 w-24 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
         </SettingRow>
       </div>
 

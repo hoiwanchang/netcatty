@@ -31,5 +31,8 @@ export const STORAGE_KEY_VAULT_KEYS_VIEW_MODE = 'netcatty_vault_keys_view_mode_v
 export const STORAGE_KEY_VAULT_SNIPPETS_VIEW_MODE = 'netcatty_vault_snippets_view_mode_v1';
 export const STORAGE_KEY_VAULT_KNOWN_HOSTS_VIEW_MODE = 'netcatty_vault_known_hosts_view_mode_v1';
 
+// Cached command candidates discovered from remote $PATH (keyed by hostId).
+export const STORAGE_KEY_COMMAND_CANDIDATES_CACHE = 'netcatty_command_candidates_cache_v1';
+
 // Archived legacy key records that are no longer supported by the app (e.g. biometric/WebAuthn/FIDO2 experiments).
 export const STORAGE_KEY_LEGACY_KEYS = 'netcatty_legacy_keys_v1';
