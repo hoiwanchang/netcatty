@@ -61,6 +61,7 @@ const en: Messages = {
   'settings.title': 'Settings',
   'settings.tab.application': 'Application',
   'settings.tab.appearance': 'Appearance',
+  'settings.tab.plugins': 'Plugins',
   'settings.tab.terminal': 'Terminal',
   'settings.tab.shortcuts': 'Shortcuts',
   'settings.tab.syncCloud': 'Sync & Cloud',
@@ -75,6 +76,36 @@ const en: Messages = {
   'settings.application.github.subtitle': 'Source code',
   'settings.application.whatsNew': "What's new",
   'settings.application.whatsNew.subtitle': 'Show release notes',
+
+  // Settings > Plugins
+  'settings.plugins.title': 'Plugins',
+  'settings.plugins.subtitle': 'Enable built-in features or manage installed plugins.',
+  'settings.plugins.install': 'Import ZIP',
+  'settings.plugins.update': 'Update',
+  'settings.plugins.delete': 'Delete',
+  'settings.plugins.installHint': 'Import ZIP to install a plugin',
+  'settings.plugins.updateHint': 'Use Update to import a new ZIP',
+  'settings.plugins.thirdParty.note': 'Installed plugins are stored as metadata only (no third-party code is executed).',
+  'settings.plugins.toast.installed': 'Plugin installed',
+  'settings.plugins.toast.updated': 'Plugin updated',
+  'settings.plugins.toast.deleted': 'Plugin deleted',
+
+  'settings.plugins.repo.title': 'Plugin Repository (Git)',
+  'settings.plugins.repo.url': 'Repository URL',
+  'settings.plugins.repo.url.desc': 'Reserved for installing plugins from a Git repository',
+  'settings.plugins.repo.url.placeholder': 'https://github.com/owner/repo',
+  'settings.plugins.repo.install': 'Install',
+  'settings.plugins.repo.toast.reserved': 'Git install is reserved for a future version (URL saved).',
+
+  // Built-in plugin names
+  'settings.plugins.ai.name': 'AI Assistant',
+  'settings.plugins.ai.desc': 'Enable AI chat and auto-suggest in terminal',
+  'settings.plugins.zebra.name': 'Zebra Blocks',
+  'settings.plugins.zebra.desc': 'Enable alternating background blocks in terminal output',
+  'settings.plugins.commandCandidates.name': 'Command Candidates',
+  'settings.plugins.commandCandidates.desc': 'Suggest remote $PATH commands while typing',
+  'settings.plugins.serverStatus.name': 'Server Status',
+  'settings.plugins.serverStatus.desc': 'Show CPU/MEM/DISK for the active SSH tab',
 
   // Update notifications
   'update.available.title': 'Update Available',

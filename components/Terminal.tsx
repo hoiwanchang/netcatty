@@ -43,6 +43,7 @@ import { useTerminalAuthState } from "./terminal/hooks/useTerminalAuthState";
 import { useLLMIntegration } from "./terminal/hooks/useLLMIntegration";
 import { DEFAULT_SERVER_STATUS_SETTINGS } from "../domain/models";
 import { useCommandCandidatesCache } from "../application/state/useCommandCandidatesCache";
+import { usePlugins } from "../application/plugins/PluginsProvider";
 
 const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
   const normalized = hex.trim().replace(/^#/, "");
@@ -168,6 +169,11 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 }) => {
   const CONNECTION_TIMEOUT = 12000;
   const { t } = useI18n();
+  const plugins = usePlugins();
+  const aiPluginEnabled = plugins.isEnabled("ai");
+  const zebraPluginEnabled = plugins.isEnabled("zebra");
+  const commandCandidatesPluginEnabled = plugins.isEnabled("commandCandidates");
+  const serverStatusPluginEnabled = plugins.isEnabled("serverStatus");
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -217,7 +223,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 
   const COMMAND_CANDIDATES_CACHE_VERSION = 1;
 
-  const commandCandidatesEnabled = terminalSettings?.commandCandidates?.enabled ?? false;
+  const commandCandidatesEnabled = commandCandidatesPluginEnabled;
 
   const commandCandidatesCacheTtlMs = useMemo(() => {
     const raw = terminalSettings?.commandCandidates?.cacheTtlMs;
@@ -269,7 +275,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   } = terminalSearch;
 
   // LLM Integration
-  const llmIntegration = useLLMIntegration(terminalSettings?.llmConfig);
+  const llmIntegration = useLLMIntegration(aiPluginEnabled ? terminalSettings?.llmConfig : undefined);
   const {
     suggestions: _llmSuggestions,
     isProcessing: _isLLMProcessing,
@@ -286,7 +292,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       const bgRgb = hexToRgb(effectiveTheme.colors.background) ?? { r: 0, g: 0, b: 0 };
       const fgRgb = hexToRgb(effectiveTheme.colors.foreground) ?? { r: 220, g: 220, b: 220 };
 
-      const zebraEnabled = terminalSettingsRef.current?.llmConfig?.zebraStripingEnabled ?? false;
+      const zebraEnabled = zebraPluginEnabled;
       const zebraIndex = zebraEnabled ? aiBlockZebraIndexRef.current : 0;
 
       const customStripeColors = terminalSettingsRef.current?.llmConfig?.zebraStripeColors;
@@ -339,7 +345,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 
       term.writeln(bg(blockBg) + fg(fgRgb) + pad(bottom) + reset);
     },
-    [effectiveTheme.colors.background, effectiveTheme.colors.foreground],
+    [effectiveTheme.colors.background, effectiveTheme.colors.foreground, zebraPluginEnabled],
   );
 
   const lastUserCommandRef = useRef<string | null>(null);
@@ -392,6 +398,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   }, []);
 
   const maybeTriggerAutoSuggest = useCallback(async () => {
+    if (!aiPluginEnabled) return;
     const config = terminalSettingsRef.current?.llmConfig;
     if (!config?.enabled || !config.autoSuggestOnError) return;
     if (autoSuggestInFlightRef.current) return;
@@ -419,7 +426,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     } finally {
       autoSuggestInFlightRef.current = false;
     }
-  }, [llmIntegration, shouldAutoSuggestFromText, writeAiBlock]);
+  }, [aiPluginEnabled, llmIntegration, shouldAutoSuggestFromText, writeAiBlock]);
 
 
   const applyCommandBlockBgToChunk = useCallback((chunk: string) => {
@@ -549,7 +556,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   );
 
   const advanceCommandBlockZebra = useCallback(() => {
-    const zebraEnabled = terminalSettingsRef.current?.llmConfig?.zebraStripingEnabled ?? false;
+    const zebraEnabled = zebraPluginEnabled;
     if (!zebraEnabled) {
       commandBlockBgSeqRef.current = "";
       return;
@@ -558,7 +565,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     const cycle = listLen > 0 ? listLen : 2;
     commandBlockZebraIndexRef.current = (commandBlockZebraIndexRef.current + 1) % cycle;
     commandBlockBgSeqRef.current = computeCommandBlockBgSeq(commandBlockZebraIndexRef.current);
-  }, [computeCommandBlockBgSeq]);
+  }, [computeCommandBlockBgSeq, zebraPluginEnabled]);
 
   useEffect(() => {
     const base = createHighlightProcessor(
@@ -593,7 +600,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         }
       }
       const processed = base(text);
-      const zebraEnabled = terminalSettingsRef.current?.llmConfig?.zebraStripingEnabled ?? false;
+      const zebraEnabled = zebraPluginEnabled;
       if (!zebraEnabled) return processed;
       return applyCommandBlockBgToChunk(processed);
     };
@@ -603,6 +610,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     applyCommandBlockBgToChunk,
     maybeTriggerAutoSuggest,
     stripAnsi,
+    zebraPluginEnabled,
   ]);
 
 
@@ -618,11 +626,11 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       return;
     }
     // Check if it's an LLM command (starts with #)
-    if (command.startsWith('#')) {
+    if (aiPluginEnabled && command.startsWith('#')) {
       const prompt = command.substring(1).trim();
       if (prompt && termRef.current) {
         // Alternate block background per AI call (when enabled)
-        if (terminalSettingsRef.current?.llmConfig?.zebraStripingEnabled) {
+        if (zebraPluginEnabled) {
           aiBlockZebraIndexRef.current += 1;
         }
 
@@ -1172,25 +1180,14 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 
         const term = runtime.term;
 
-        if (!llmBannerPrintedRef.current) {
+        if (aiPluginEnabled && !llmBannerPrintedRef.current) {
           llmBannerPrintedRef.current = true;
-          const enabled = terminalSettingsRef.current?.llmConfig?.enabled;
           term.writeln(
-            enabled
-              ? "\r\n\x1b[36mAI 助手已启用：输入 #你的问题 回车\x1b[0m\r\n"
-              : "\r\n\x1b[90m提示：输入 #你的问题 回车 使用 AI（到 设置 → 终端 → AI 助手 启用/配置）\x1b[0m\r\n",
+            "\r\n\x1b[36mAI 助手已启用：输入 #你的问题 回车\x1b[0m\r\n",
           );
         }
 
-        if (!llmBannerPrintedRef.current) {
-          llmBannerPrintedRef.current = true;
-          const enabled = terminalSettingsRef.current?.llmConfig?.enabled;
-          term.writeln(
-            enabled
-              ? "\r\n\x1b[36mAI 助手已启用：输入 #你的问题 回车\x1b[0m\r\n"
-              : "\r\n\x1b[90m提示：输入 #你的问题 回车 使用 AI（到 设置 → 终端 → AI 助手 启用/配置）\x1b[0m\r\n",
-          );
-        } else if (host.protocol === "serial") {
+        if (host.protocol === "serial") {
           setStatus("connecting");
           setProgressLogs(["Initializing serial connection..."]);
           await sessionStarters.startSerial(term);
@@ -1675,7 +1672,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   const [perfLevel, setPerfLevel] = useState<0 | 1 | 2 | 3>(0);
 
   useEffect(() => {
-    if (!isVisible || !isActiveTab || !serverStatus) {
+    if (!serverStatusPluginEnabled || !isVisible || !isActiveTab || !serverStatus) {
       setPerfLevel(0);
       return;
     }
@@ -1706,7 +1703,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     ro.observe(left);
     ro.observe(right);
     return () => ro.disconnect();
-  }, [isVisible, isActiveTab, serverStatus]);
+  }, [isVisible, isActiveTab, serverStatus, serverStatusPluginEnabled]);
 
   return (
     <TerminalContextMenu
@@ -1748,7 +1745,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
               />
             </div>
 
-            {isActiveTab && serverStatus && perfLevel > 0 ? (
+            {serverStatusPluginEnabled && isActiveTab && serverStatus && perfLevel > 0 ? (
               <div className="flex-1 min-w-[150px]">
                 <span
                   className="ml-2 text-muted-foreground whitespace-nowrap truncate block"

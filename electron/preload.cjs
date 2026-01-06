@@ -504,6 +504,11 @@ const api = {
 
   // LLM network requests (proxied via main process to avoid CORS)
   llmRequest: (options) => ipcRenderer.invoke("netcatty:llm:request", options),
+
+  // Plugins (on-disk manifests)
+  pluginsList: () => ipcRenderer.invoke("netcatty:plugins:list"),
+  pluginsInstall: (manifest) => ipcRenderer.invoke("netcatty:plugins:install", manifest),
+  pluginsDelete: (id) => ipcRenderer.invoke("netcatty:plugins:delete", { id }),
 };
 
 // Merge with existing netcatty (if any) to avoid stale objects on hot reload

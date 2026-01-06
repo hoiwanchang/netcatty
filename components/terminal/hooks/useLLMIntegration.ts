@@ -30,8 +30,8 @@ export const useLLMIntegration = (llmConfig?: LLMConfig) => {
   }, [llmConfig]);
 
   const handleLLMChat = useCallback(async (prompt: string): Promise<LLMResponse> => {
-    if (!llmConfig?.enabled) {
-      return { text: '', error: 'LLM is not enabled. Please configure it in settings.' };
+    if (!llmConfig) {
+      return { text: '', error: 'LLM config is missing. Please configure it in settings.' };
     }
 
     setIsProcessing(true);
@@ -41,10 +41,10 @@ export const useLLMIntegration = (llmConfig?: LLMConfig) => {
     } finally {
       setIsProcessing(false);
     }
-  }, [llmConfig?.enabled]);
+  }, [llmConfig]);
 
   const suggestCommandFix = useCallback(async (command: string, errorOutput: string): Promise<LLMResponse | null> => {
-    if (!llmConfig?.enabled || !llmConfig?.autoSuggestOnError) {
+    if (!llmConfig || !llmConfig?.autoSuggestOnError) {
       return null;
     }
 
@@ -65,7 +65,7 @@ export const useLLMIntegration = (llmConfig?: LLMConfig) => {
     } finally {
       setIsProcessing(false);
     }
-  }, [llmConfig?.enabled, llmConfig?.autoSuggestOnError]);
+  }, [llmConfig]);
 
   const clearSuggestions = useCallback(() => {
     setSuggestions([]);

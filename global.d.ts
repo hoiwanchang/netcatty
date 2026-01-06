@@ -315,6 +315,11 @@ interface NetcattyBridge {
     timeoutMs?: number;
   }): Promise<{ ok: boolean; status: number; statusText?: string; bodyText: string }>;
 
+  // Plugins (on-disk manifests)
+  pluginsList?: () => Promise<Array<{ id: string; name: string; version: string; description?: string; homepage?: string }>>;
+  pluginsInstall?: (manifest: { id: string; name: string; version: string; description?: string; homepage?: string }) => Promise<{ id: string; name: string; version: string; description?: string; homepage?: string }>;
+  pluginsDelete?: (id: string) => Promise<{ ok: true }>;
+
   // App info (name/version/platform) for About screens
   getAppInfo?(): Promise<{ name: string; version: string; platform: string }>;
 

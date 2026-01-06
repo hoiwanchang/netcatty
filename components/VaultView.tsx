@@ -13,7 +13,6 @@ import {
   Plus,
   Search,
   Settings,
-  Sparkles,
   TerminalSquare,
   Trash2,
   Upload,
@@ -45,7 +44,6 @@ import { AppLogo } from "./AppLogo";
 import ConnectionLogsManager from "./ConnectionLogsManager";
 import { DistroAvatar } from "./DistroAvatar";
 import HostDetailsPanel from "./HostDetailsPanel";
-import AiSettingsManager from "./AiSettingsManager";
 import KeychainManager from "./KeychainManager";
 import KnownHostsManager from "./KnownHostsManager";
 import PortForwarding from "./PortForwardingNew";
@@ -78,7 +76,7 @@ import { toast } from "./ui/toast";
 
 const LazyProtocolSelectDialog = lazy(() => import("./ProtocolSelectDialog"));
 
-export type VaultSection = "hosts" | "keys" | "snippets" | "port" | "knownhosts" | "ai" | "logs";
+export type VaultSection = "hosts" | "keys" | "snippets" | "port" | "knownhosts" | "logs";
 
 // Props without isActive - it's now subscribed internally
 interface VaultViewProps {
@@ -806,17 +804,6 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
             <BookMarked size={16} /> {t("vault.nav.knownHosts")}
           </Button>
           <Button
-            variant={currentSection === "ai" ? "secondary" : "ghost"}
-            className={cn(
-              "w-full justify-start gap-3 h-10",
-              currentSection === "ai" &&
-              "bg-foreground/5 text-foreground hover:bg-foreground/10 border-border/40",
-            )}
-            onClick={() => setCurrentSection("ai")}
-          >
-            <Sparkles size={16} /> {t("vault.nav.ai")}
-          </Button>
-          <Button
             variant={currentSection === "logs" ? "secondary" : "ghost"}
             className={cn(
               "w-full justify-start gap-3 h-10",
@@ -842,7 +829,6 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
 
       {/* Main Area */}
       <div className="flex-1 flex flex-col min-h-0 relative">
-        {currentSection === "ai" && <AiSettingsManager />}
         {currentSection === "hosts" && (
           <header className="border-b border-border/50 bg-secondary/80 backdrop-blur app-drag">
             <div className="h-14 px-4 py-2 flex items-center gap-3">

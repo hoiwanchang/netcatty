@@ -2,14 +2,16 @@
  * Settings Page - Standalone settings window content
  * This component is rendered in a separate Electron window
  */
-import { AppWindow, Cloud, Keyboard, Palette, TerminalSquare, X } from "lucide-react";
+import { AppWindow, Cloud, Keyboard, Palette, Puzzle, TerminalSquare, X } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { useSettingsState } from "../application/state/useSettingsState";
 import { useVaultState } from "../application/state/useVaultState";
 import { useWindowControls } from "../application/state/useWindowControls";
 import { I18nProvider, useI18n } from "../application/i18n/I18nProvider";
+import { PluginsProvider } from "../application/plugins/PluginsProvider";
 import SettingsApplicationTab from "./SettingsApplicationTab";
 import SettingsAppearanceTab from "./settings/tabs/SettingsAppearanceTab";
+import SettingsPluginsTab from "./settings/tabs/SettingsPluginsTab";
 import SettingsShortcutsTab from "./settings/tabs/SettingsShortcutsTab";
 import SettingsTerminalTab from "./settings/tabs/SettingsTerminalTab";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
@@ -110,6 +112,12 @@ const SettingsPageContent: React.FC<{ settings: SettingsState }> = ({ settings }
                             <Palette size={14} /> {t("settings.tab.appearance")}
                         </TabsTrigger>
                         <TabsTrigger
+                            value="plugins"
+                            className="w-full justify-start gap-2 px-3 py-2 text-sm data-[state=active]:bg-background hover:bg-background/60 rounded-md transition-colors"
+                        >
+                            <Puzzle size={14} /> {t("settings.tab.plugins")}
+                        </TabsTrigger>
+                        <TabsTrigger
                             value="terminal"
                             className="w-full justify-start gap-2 px-3 py-2 text-sm data-[state=active]:bg-background hover:bg-background/60 rounded-md transition-colors"
                         >
@@ -149,6 +157,14 @@ const SettingsPageContent: React.FC<{ settings: SettingsState }> = ({ settings }
                             setUiLanguage={settings.setUiLanguage}
                             customCSS={settings.customCSS}
                             setCustomCSS={settings.setCustomCSS}
+                            terminalThemeId={settings.terminalThemeId}
+                            terminalSettings={settings.terminalSettings}
+                            updateTerminalSetting={settings.updateTerminalSetting}
+                        />
+                    )}
+
+                    {mountedTabs.has("plugins") && (
+                        <SettingsPluginsTab
                             terminalThemeId={settings.terminalThemeId}
                             terminalSettings={settings.terminalSettings}
                             updateTerminalSetting={settings.updateTerminalSetting}
@@ -195,8 +211,10 @@ export default function SettingsPage() {
     const settings = useSettingsState();
 
     return (
-        <I18nProvider locale={settings.uiLanguage}>
-            <SettingsPageContent settings={settings} />
-        </I18nProvider>
+        <PluginsProvider>
+            <I18nProvider locale={settings.uiLanguage}>
+                <SettingsPageContent settings={settings} />
+            </I18nProvider>
+        </PluginsProvider>
     );
 }

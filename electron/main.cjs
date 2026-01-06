@@ -71,6 +71,7 @@ const localFsBridge = require("./bridges/localFsBridge.cjs");
 const transferBridge = require("./bridges/transferBridge.cjs");
 const portForwardingBridge = require("./bridges/portForwardingBridge.cjs");
 const terminalBridge = require("./bridges/terminalBridge.cjs");
+const pluginsBridge = require("./bridges/pluginsBridge.cjs");
 const oauthBridge = require("./bridges/oauthBridge.cjs");
 const githubAuthBridge = require("./bridges/githubAuthBridge.cjs");
 const googleAuthBridge = require("./bridges/googleAuthBridge.cjs");
@@ -368,6 +369,7 @@ const registerBridges = (win) => {
   sftpBridge.init(deps);
   transferBridge.init(deps);
   terminalBridge.init(deps);
+  pluginsBridge.init(deps);
 
   // Register all IPC handlers
   sshBridge.registerHandlers(ipcMain);
@@ -376,6 +378,7 @@ const registerBridges = (win) => {
   transferBridge.registerHandlers(ipcMain);
   portForwardingBridge.registerHandlers(ipcMain);
   terminalBridge.registerHandlers(ipcMain);
+  pluginsBridge.registerHandlers(ipcMain);
   oauthBridge.setupOAuthBridge(ipcMain);
   githubAuthBridge.registerHandlers(ipcMain);
   googleAuthBridge.registerHandlers(ipcMain, electronModule);
@@ -522,6 +525,10 @@ function showStartupError(err) {
 
 // Application lifecycle
 app.whenReady().then(() => {
+  // Register IPC bridges as early as possible so secondary windows/routes
+  // (e.g. Settings) can call bridge APIs immediately.
+  registerBridges();
+
   registerAppProtocol();
 
   // Set dock icon on macOS

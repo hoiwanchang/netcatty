@@ -8,6 +8,7 @@ import { useUpdateCheck } from './application/state/useUpdateCheck';
 import { useVaultState } from './application/state/useVaultState';
 import { useWindowControls } from './application/state/useWindowControls';
 import { I18nProvider, useI18n } from './application/i18n/I18nProvider';
+import { PluginsProvider, usePlugins } from './application/plugins/PluginsProvider';
 import { matchesKeyBinding } from './domain/models';
 import { resolveHostAuth } from './domain/sshAuth';
 import { netcattyBridge } from './infrastructure/services/netcattyBridge';
@@ -735,13 +736,16 @@ function App({ settings }: { settings: SettingsState }) {
 
   const activeTabId = useActiveTabId();
 
+  const plugins = usePlugins();
+  const serverStatusPluginEnabled = plugins.isEnabled('serverStatus');
+
   const activeSessionStatus = useActiveSessionServerStatus({
-    activeTabId,
+    activeTabId: serverStatusPluginEnabled ? activeTabId : '',
     sessions,
     hosts,
     keys,
     identities,
-    terminalSettings,
+    terminalSettings: serverStatusPluginEnabled ? terminalSettings : undefined,
   });
 
   return (
@@ -987,9 +991,11 @@ function AppWithProviders() {
 
   return (
     <I18nProvider locale={settings.uiLanguage}>
-      <ToastProvider>
-        <App settings={settings} />
-      </ToastProvider>
+      <PluginsProvider>
+        <ToastProvider>
+          <App settings={settings} />
+        </ToastProvider>
+      </PluginsProvider>
     </I18nProvider>
   );
 }
