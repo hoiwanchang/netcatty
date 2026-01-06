@@ -23,7 +23,22 @@ export interface EnvVar {
 }
 
 // Protocol type for connections
-export type HostProtocol = 'ssh' | 'telnet' | 'mosh' | 'local';
+export type HostProtocol = 'ssh' | 'telnet' | 'mosh' | 'local' | 'serial';
+
+// Serial port configuration
+export type SerialParity = 'none' | 'even' | 'odd' | 'mark' | 'space';
+export type SerialFlowControl = 'none' | 'xon/xoff' | 'rts/cts';
+
+export interface SerialConfig {
+  path: string; // Serial port path (e.g., /dev/ttyUSB0, COM1)
+  baudRate: number; // Baud rate (e.g., 9600, 115200)
+  dataBits?: 5 | 6 | 7 | 8; // Data bits (default: 8)
+  stopBits?: 1 | 1.5 | 2; // Stop bits (default: 1)
+  parity?: SerialParity; // Parity (default: 'none')
+  flowControl?: SerialFlowControl; // Flow control (default: 'none')
+  localEcho?: boolean; // Force local echo (default: false, rely on remote echo)
+  lineMode?: boolean; // Line mode - buffer input and send on Enter (default: false)
+}
 
 // Per-protocol configuration
 export interface ProtocolConfig {
@@ -376,8 +391,8 @@ export interface TerminalSettings {
   altAsMeta: boolean; // Use ⌥ as the Meta key
   scrollOnInput: boolean; // Scroll terminal to bottom on input
   scrollOnOutput: boolean; // Scroll terminal to bottom on output
-  scrollOnKeyPress: boolean; // Scroll terminal to bottom on key press
   scrollOnPaste: boolean; // Scroll terminal to bottom on paste
+  scrollOnKeyPress: boolean; // Scroll terminal to bottom on key press
 
   // Mouse
   rightClickBehavior: RightClickBehavior;
@@ -398,6 +413,10 @@ export interface TerminalSettings {
 
   // Command candidates shown inline while typing (remote $PATH)
   commandCandidates?: CommandCandidatesSettings;
+
+  // Local Shell Configuration
+  localShell: string; // Path to shell executable (empty = system default)
+  localStartDir: string; // Starting directory for local terminal (empty = home directory)
 }
 
 export const DEFAULT_KEYWORD_HIGHLIGHT_RULES: KeywordHighlightRule[] = [
@@ -448,7 +467,7 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   scrollOnInput: true,
   scrollOnOutput: false,
   scrollOnKeyPress: false,
-  scrollOnPaste: false,
+  scrollOnPaste: true,
   rightClickBehavior: 'context-menu',
   copyOnSelect: false,
   middleClickPaste: true,
@@ -459,6 +478,8 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   llmConfig: DEFAULT_LLM_CONFIG,
   serverStatus: DEFAULT_SERVER_STATUS_SETTINGS,
   commandCandidates: DEFAULT_COMMAND_CANDIDATES_SETTINGS,
+  localShell: '', // Empty = use system default
+  localStartDir: '', // Empty = use home directory
 };
 
 export interface TerminalTheme {
@@ -499,9 +520,11 @@ export interface TerminalSession {
   workspaceId?: string;
   startupCommand?: string; // Command to run after connection (for snippet runner)
   // Connection-time protocol overrides (used instead of looking up from hosts)
-  protocol?: 'ssh' | 'telnet' | 'local';
+  protocol?: 'ssh' | 'telnet' | 'local' | 'serial';
   port?: number;
   moshEnabled?: boolean;
+  // Serial-specific connection settings
+  serialConfig?: SerialConfig;
 }
 
 export interface RemoteFile {

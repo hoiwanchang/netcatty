@@ -1,16 +1,27 @@
 /**
- * Terminal Bridge - Handles local shell and telnet/mosh sessions
+ * Terminal Bridge - Handles local shell, telnet/mosh, and serial port sessions
  * Extracted from main.cjs for single responsibility
  */
 
 const os = require("node:os");
 const fs = require("node:fs");
 const net = require("node:net");
+const path = require("node:path");
 const pty = require("node-pty");
+const { SerialPort } = require("serialport");
 
 // Shared references
 let sessions = null;
 let electronModule = null;
+
+const DEFAULT_UTF8_LOCALE = "en_US.UTF-8";
+const LOGIN_SHELLS = new Set(["bash", "zsh", "fish", "ksh"]);
+
+const getLoginShellArgs = (shellPath) => {
+  if (!shellPath || process.platform === "win32") return [];
+  const shellName = path.basename(shellPath);
+  return LOGIN_SHELLS.has(shellName) ? ["-l"] : [];
+};
 
 /**
  * Initialize the terminal bridge with dependencies
@@ -52,6 +63,32 @@ function findExecutable(name) {
   return name;
 }
 
+const isUtf8Locale = (value) => typeof value === "string" && /utf-?8/i.test(value);
+
+const isEmptyLocale = (value) => {
+  if (value === undefined || value === null) return true;
+  const trimmed = String(value).trim();
+  if (!trimmed) return true;
+  return trimmed === "C" || trimmed === "POSIX";
+};
+
+const applyLocaleDefaults = (env) => {
+  const hasUtf8 =
+    isUtf8Locale(env.LC_ALL) || isUtf8Locale(env.LC_CTYPE) || isUtf8Locale(env.LANG);
+  if (hasUtf8) return env;
+
+  const hasAnyLocale =
+    !isEmptyLocale(env.LC_ALL) || !isEmptyLocale(env.LC_CTYPE) || !isEmptyLocale(env.LANG);
+  if (hasAnyLocale) return env;
+
+  return {
+    ...env,
+    LANG: DEFAULT_UTF8_LOCALE,
+    LC_CTYPE: DEFAULT_UTF8_LOCALE,
+    LC_ALL: DEFAULT_UTF8_LOCALE,
+  };
+};
+
 /**
  * Start a local terminal session
  */
@@ -63,17 +100,38 @@ function startLocalSession(event, payload) {
     ? findExecutable("powershell") || "powershell.exe"
     : process.env.SHELL || "/bin/bash";
   const shell = payload?.shell || defaultShell;
-  const env = {
+  const shellArgs = getLoginShellArgs(shell);
+  const env = applyLocaleDefaults({
     ...process.env,
     ...(payload?.env || {}),
     TERM: "xterm-256color",
     COLORTERM: "truecolor",
-  };
+  });
   
-  const proc = pty.spawn(shell, [], {
+  // Determine the starting directory
+  // Default to home directory if not specified or if specified path is invalid
+  const defaultCwd = os.homedir();
+  let cwd = defaultCwd;
+  
+  if (payload?.cwd) {
+    try {
+      // Resolve to absolute path and check if it exists and is a directory
+      const resolvedPath = path.resolve(payload.cwd);
+      if (fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).isDirectory()) {
+        cwd = resolvedPath;
+      } else {
+        console.warn(`[Terminal] Specified cwd "${payload.cwd}" is not a valid directory, using home directory`);
+      }
+    } catch (err) {
+      console.warn(`[Terminal] Error validating cwd "${payload.cwd}":`, err.message);
+    }
+  }
+  
+  const proc = pty.spawn(shell, shellArgs, {
     cols: payload?.cols || 80,
     rows: payload?.rows || 24,
     env,
+    cwd,
   });
   
   const session = {
@@ -387,6 +445,103 @@ async function startMoshSession(event, options) {
 }
 
 /**
+ * List available serial ports (hardware only)
+ */
+async function listSerialPorts() {
+  try {
+    const ports = await SerialPort.list();
+    return ports.map(port => ({
+      path: port.path,
+      manufacturer: port.manufacturer || '',
+      serialNumber: port.serialNumber || '',
+      vendorId: port.vendorId || '',
+      productId: port.productId || '',
+      pnpId: port.pnpId || '',
+      type: 'hardware',
+    }));
+  } catch (err) {
+    console.error("[Serial] Failed to list ports:", err.message);
+    return [];
+  }
+}
+
+/**
+ * Start a serial port session (supports both hardware serial ports and PTY devices)
+ * Note: SerialPort library can open PTY devices directly, they just won't appear in list()
+ */
+async function startSerialSession(event, options) {
+  const sessionId =
+    options.sessionId ||
+    `serial-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  const portPath = options.path;
+  const baudRate = options.baudRate || 115200;
+  const dataBits = options.dataBits || 8;
+  const stopBits = options.stopBits || 1;
+  const parity = options.parity || 'none';
+  const flowControl = options.flowControl || 'none';
+
+  console.log(`[Serial] Starting connection to ${portPath} at ${baudRate} baud`);
+
+  return new Promise((resolve, reject) => {
+    try {
+      const serialPort = new SerialPort({
+        path: portPath,
+        baudRate: baudRate,
+        dataBits: dataBits,
+        stopBits: stopBits,
+        parity: parity,
+        rtscts: flowControl === 'rts/cts',
+        xon: flowControl === 'xon/xoff',
+        xoff: flowControl === 'xon/xoff',
+        autoOpen: false,
+      });
+
+      serialPort.open((err) => {
+        if (err) {
+          console.error(`[Serial] Failed to open port ${portPath}:`, err.message);
+          reject(new Error(`Failed to open serial port: ${err.message}`));
+          return;
+        }
+
+        console.log(`[Serial] Connected to ${portPath}`);
+
+        const session = {
+          serialPort,
+          type: 'serial',
+          webContentsId: event.sender.id,
+        };
+        sessions.set(sessionId, session);
+
+        serialPort.on('data', (data) => {
+          const contents = electronModule.webContents.fromId(session.webContentsId);
+          contents?.send("netcatty:data", { sessionId, data: data.toString('binary') });
+        });
+
+        serialPort.on('error', (err) => {
+          console.error(`[Serial] Port error: ${err.message}`);
+          const contents = electronModule.webContents.fromId(session.webContentsId);
+          contents?.send("netcatty:exit", { sessionId, exitCode: 1, error: err.message });
+          sessions.delete(sessionId);
+        });
+
+        serialPort.on('close', () => {
+          console.log(`[Serial] Port closed`);
+          const contents = electronModule.webContents.fromId(session.webContentsId);
+          contents?.send("netcatty:exit", { sessionId, exitCode: 0 });
+          sessions.delete(sessionId);
+        });
+
+        resolve({ sessionId });
+      });
+    } catch (err) {
+      console.error("[Serial] Failed to start serial session:", err.message);
+      reject(err);
+    }
+  });
+}
+
+/**
  * Write data to a session
  */
 function writeToSession(event, payload) {
@@ -400,6 +555,8 @@ function writeToSession(event, payload) {
       session.proc.write(payload.data);
     } else if (session.socket) {
       session.socket.write(payload.data);
+    } else if (session.serialPort) {
+      session.serialPort.write(payload.data);
     }
   } catch (err) {
     if (err.code !== 'EPIPE' && err.code !== 'ERR_STREAM_DESTROYED') {
@@ -454,6 +611,8 @@ function closeSession(event, payload) {
       session.proc.kill();
     } else if (session.socket) {
       session.socket.destroy();
+    } else if (session.serialPort) {
+      session.serialPort.close();
     }
     if (session.chainConnections) {
       for (const c of session.chainConnections) {
@@ -473,9 +632,88 @@ function registerHandlers(ipcMain) {
   ipcMain.handle("netcatty:local:start", startLocalSession);
   ipcMain.handle("netcatty:telnet:start", startTelnetSession);
   ipcMain.handle("netcatty:mosh:start", startMoshSession);
+  ipcMain.handle("netcatty:serial:start", startSerialSession);
+  ipcMain.handle("netcatty:serial:list", listSerialPorts);
+  ipcMain.handle("netcatty:local:defaultShell", getDefaultShell);
+  ipcMain.handle("netcatty:local:validatePath", validatePath);
   ipcMain.on("netcatty:write", writeToSession);
   ipcMain.on("netcatty:resize", resizeSession);
   ipcMain.on("netcatty:close", closeSession);
+}
+
+/**
+ * Get the default shell for the current platform
+ */
+function getDefaultShell() {
+  if (process.platform === "win32") {
+    return findExecutable("powershell") || "powershell.exe";
+  }
+  return process.env.SHELL || "/bin/bash";
+}
+
+/**
+ * Validate a path - check if it exists and whether it's a file or directory
+ * @param {object} event - IPC event
+ * @param {object} payload - Contains { path: string, type?: 'file' | 'directory' | 'any' }
+ * @returns {{ exists: boolean, isFile: boolean, isDirectory: boolean }}
+ */
+function validatePath(event, payload) {
+  const targetPath = payload?.path;
+  const type = payload?.type || 'any';
+  if (!targetPath) {
+    return { exists: false, isFile: false, isDirectory: false };
+  }
+  
+  try {
+    // Resolve path (handle ~, etc.)
+    let resolvedPath = targetPath;
+    if (resolvedPath === "~") {
+      resolvedPath = os.homedir();
+    } else if (resolvedPath.startsWith("~/")) {
+      resolvedPath = path.join(os.homedir(), resolvedPath.slice(2));
+    }
+    resolvedPath = path.resolve(resolvedPath);
+    
+    if (fs.existsSync(resolvedPath)) {
+      const stat = fs.statSync(resolvedPath);
+      return {
+        exists: true,
+        isFile: stat.isFile(),
+        isDirectory: stat.isDirectory(),
+      };
+    }
+    
+    // If type is 'file' and path doesn't exist, try to resolve via PATH (for executables like cmd.exe, powershell.exe)
+    if (type === 'file') {
+      const resolvedExecutable = findExecutable(targetPath);
+      // findExecutable returns the original name if not found, so check if it actually resolves to a real path
+      if (resolvedExecutable !== targetPath && fs.existsSync(resolvedExecutable)) {
+        const stat = fs.statSync(resolvedExecutable);
+        return {
+          exists: true,
+          isFile: stat.isFile(),
+          isDirectory: stat.isDirectory(),
+        };
+      }
+      // Also try with .exe extension on Windows if not already present
+      if (process.platform === 'win32' && !targetPath.toLowerCase().endsWith('.exe')) {
+        const withExe = findExecutable(targetPath + '.exe');
+        if (withExe !== targetPath + '.exe' && fs.existsSync(withExe)) {
+          const stat = fs.statSync(withExe);
+          return {
+            exists: true,
+            isFile: stat.isFile(),
+            isDirectory: stat.isDirectory(),
+          };
+        }
+      }
+    }
+    
+    return { exists: false, isFile: false, isDirectory: false };
+  } catch (err) {
+    console.warn(`[Terminal] Error validating path "${targetPath}":`, err.message);
+    return { exists: false, isFile: false, isDirectory: false };
+  }
 }
 
 /**
@@ -497,6 +735,12 @@ function cleanupAllSessions() {
         }
       } else if (session.socket) {
         session.socket.destroy();
+      } else if (session.serialPort) {
+        try {
+          session.serialPort.close();
+        } catch (e) {
+          // Ignore errors during cleanup
+        }
       }
       if (session.chainConnections) {
         for (const c of session.chainConnections) {
@@ -517,8 +761,12 @@ module.exports = {
   startLocalSession,
   startTelnetSession,
   startMoshSession,
+  startSerialSession,
+  listSerialPorts,
   writeToSession,
   resizeSession,
   closeSession,
   cleanupAllSessions,
+  getDefaultShell,
+  validatePath,
 };

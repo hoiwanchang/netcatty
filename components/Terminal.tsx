@@ -12,6 +12,7 @@ import {
   Host,
   Identity,
   KnownHost,
+  SerialConfig,
   SSHKey,
   Snippet,
   TerminalSession,
@@ -95,6 +96,7 @@ interface TerminalProps {
   terminalSettings?: TerminalSettings;
   sessionId: string;
   startupCommand?: string;
+  serialConfig?: SerialConfig;
   onUpdateTerminalThemeId?: (themeId: string) => void;
   onUpdateTerminalFontFamilyId?: (fontFamilyId: string) => void;
   onUpdateTerminalFontSize?: (fontSize: number) => void;
@@ -142,6 +144,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   terminalSettings,
   sessionId,
   startupCommand,
+  serialConfig,
   onUpdateTerminalThemeId,
   onUpdateTerminalFontFamilyId,
   onUpdateTerminalFontSize,
@@ -190,6 +193,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     top: number;
     placement: "below" | "above";
   }>({ open: false, items: [], left: 0, top: 0, placement: "below" });
+  const serialLineBufferRef = useRef<string>("");
 
   const terminalSettingsRef = useRef(terminalSettings);
   terminalSettingsRef.current = terminalSettings;
@@ -1090,6 +1094,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     startupCommand,
     terminalSettings,
     terminalBackend,
+    serialConfig,
     sessionRef,
     hasConnectedRef,
     hasRunStartupCommandRef,
@@ -1153,6 +1158,10 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           },
           isSensitiveInputRef,
           setIsSearchOpen,
+          // Serial-specific options
+          serialLocalEcho: serialConfig?.localEcho,
+          serialLineMode: serialConfig?.lineMode,
+          serialLineBufferRef,
         });
 
         xtermRuntimeRef.current = runtime;
@@ -1173,7 +1182,19 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           );
         }
 
-        if (host.protocol === "local" || host.hostname === "localhost") {
+        if (!llmBannerPrintedRef.current) {
+          llmBannerPrintedRef.current = true;
+          const enabled = terminalSettingsRef.current?.llmConfig?.enabled;
+          term.writeln(
+            enabled
+              ? "\r\n\x1b[36mAI 助手已启用：输入 #你的问题 回车\x1b[0m\r\n"
+              : "\r\n\x1b[90m提示：输入 #你的问题 回车 使用 AI（到 设置 → 终端 → AI 助手 启用/配置）\x1b[0m\r\n",
+          );
+        } else if (host.protocol === "serial") {
+          setStatus("connecting");
+          setProgressLogs(["Initializing serial connection..."]);
+          await sessionStarters.startSerial(term);
+        } else if (host.protocol === "local" || host.hostname === "localhost") {
           setStatus("connecting");
           setProgressLogs(["Initializing local shell..."]);
           await sessionStarters.startLocal(term);
@@ -1234,21 +1255,28 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   // Connection timeline and timeout visuals
   useEffect(() => {
     if (status !== "connecting" || auth.needsAuth) return;
-    const scripted = [
-      "Resolving host and keys...",
-      "Negotiating ciphers...",
-      "Exchanging keys...",
-      "Authenticating user...",
-      "Waiting for server greeting...",
-    ];
-    let idx = 0;
-    const stepTimer = setInterval(() => {
-      setProgressLogs((prev) => {
-        if (idx >= scripted.length) return prev;
-        const next = scripted[idx++];
-        return prev.includes(next) ? prev : [...prev, next];
-      });
-    }, 900);
+
+    // Only show SSH-specific scripted logs for SSH connections
+    const isSSH = host.protocol !== "serial" && host.protocol !== "local" && host.protocol !== "telnet" && host.hostname !== "localhost";
+
+    let stepTimer: ReturnType<typeof setInterval> | undefined;
+    if (isSSH) {
+      const scripted = [
+        "Resolving host and keys...",
+        "Negotiating ciphers...",
+        "Exchanging keys...",
+        "Authenticating user...",
+        "Waiting for server greeting...",
+      ];
+      let idx = 0;
+      stepTimer = setInterval(() => {
+        setProgressLogs((prev) => {
+          if (idx >= scripted.length) return prev;
+          const next = scripted[idx++];
+          return prev.includes(next) ? prev : [...prev, next];
+        });
+      }, 900);
+    }
 
     setTimeLeft(CONNECTION_TIMEOUT / 1000);
     const countdown = setInterval(() => {
@@ -1272,13 +1300,13 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     }, 200);
 
     return () => {
-      clearInterval(stepTimer);
+      if (stepTimer) clearInterval(stepTimer);
       clearInterval(countdown);
       clearTimeout(timeout);
       clearInterval(prog);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- updateStatus is a stable internal helper
-  }, [status, auth.needsAuth]);
+  }, [status, auth.needsAuth, host.protocol, host.hostname]);
 
   const safeFit = () => {
     const fitAddon = fitAddonRef.current;
@@ -1696,12 +1724,12 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     >
       <div className="relative h-full w-full flex overflow-hidden bg-gradient-to-br from-[#050910] via-[#06101a] to-[#0b1220]">
         <div className="absolute left-0 right-0 top-0 z-20 pointer-events-none">
-            <div
-              className="flex items-center gap-1 px-2 py-0.5 backdrop-blur-md pointer-events-auto min-w-0 border-b-[0.5px]"
+          <div
+            className="flex items-center gap-1 px-2 py-0.5 backdrop-blur-md pointer-events-auto min-w-0 border-b-[0.5px]"
               ref={toolbarRef}
-              style={{
-                backgroundColor: effectiveTheme.colors.background,
-                color: effectiveTheme.colors.foreground,
+            style={{
+              backgroundColor: effectiveTheme.colors.background,
+              color: effectiveTheme.colors.foreground,
               borderColor: `color-mix(in srgb, ${effectiveTheme.colors.foreground} 8%, ${effectiveTheme.colors.background} 92%)`,
               ['--terminal-toolbar-fg' as never]: effectiveTheme.colors.foreground,
               ['--terminal-toolbar-bg' as never]: effectiveTheme.colors.background,
@@ -1759,14 +1787,14 @@ const TerminalComponent: React.FC<TerminalProps> = ({
             )}
             <div ref={toolbarRightRef} className="flex items-center gap-0.5 flex-shrink-0">
               {inWorkspace && onToggleBroadcast && (
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    className={cn(
-                      "h-6 w-6 p-0 shadow-none border-none text-[color:var(--terminal-toolbar-fg)]",
-                      "bg-transparent hover:bg-transparent",
-                      isBroadcastEnabled && "text-green-500",
-                    )}
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className={cn(
+                    "h-6 w-6 p-0 shadow-none border-none text-[color:var(--terminal-toolbar-fg)]",
+                    "bg-transparent hover:bg-transparent",
+                    isBroadcastEnabled && "text-green-500",
+                  )}
                   onClick={onToggleBroadcast}
                   title={
                     isBroadcastEnabled
@@ -1778,22 +1806,22 @@ const TerminalComponent: React.FC<TerminalProps> = ({
                       ? t("terminal.toolbar.broadcastDisable")
                       : t("terminal.toolbar.broadcastEnable")
                   }
-                  >
-                    <Radio size={12} />
-                  </Button>
-                )}
-                {inWorkspace && !isFocusMode && onExpandToFocus && (
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    className="h-6 w-6 p-0 shadow-none border-none text-[color:var(--terminal-toolbar-fg)] bg-transparent hover:bg-transparent"
-                    onClick={onExpandToFocus}
-                    title={t("terminal.toolbar.focusMode")}
-                    aria-label={t("terminal.toolbar.focusMode")}
-                  >
-                    <Maximize2 size={12} />
-                  </Button>
-                )}
+                >
+                  <Radio size={12} />
+                </Button>
+              )}
+              {inWorkspace && !isFocusMode && onExpandToFocus && (
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="h-6 w-6 p-0 shadow-none border-none text-[color:var(--terminal-toolbar-fg)] bg-transparent hover:bg-transparent"
+                  onClick={onExpandToFocus}
+                  title={t("terminal.toolbar.focusMode")}
+                  aria-label={t("terminal.toolbar.focusMode")}
+                >
+                  <Maximize2 size={12} />
+                </Button>
+              )}
               {renderControls({ showClose: inWorkspace })}
             </div>
           </div>
@@ -1907,6 +1935,47 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           host={host}
           credentials={(() => {
             const resolvedAuth = resolveHostAuth({ host, keys, identities });
+
+            // Build proxy config if present
+            const proxyConfig = host.proxyConfig
+              ? {
+                type: host.proxyConfig.type,
+                host: host.proxyConfig.host,
+                port: host.proxyConfig.port,
+                username: host.proxyConfig.username,
+                password: host.proxyConfig.password,
+              }
+              : undefined;
+
+            // Build jump hosts array if host chain is configured
+            let jumpHosts: NetcattyJumpHost[] | undefined;
+            if (host.hostChain?.hostIds && host.hostChain.hostIds.length > 0) {
+              jumpHosts = host.hostChain.hostIds
+                .map((hostId) => allHosts.find((h) => h.id === hostId))
+                .filter((h): h is Host => !!h)
+                .map((jumpHost) => {
+                  const jumpAuth = resolveHostAuth({
+                    host: jumpHost,
+                    keys,
+                    identities,
+                  });
+                  const jumpKey = jumpAuth.key;
+                  return {
+                    hostname: jumpHost.hostname,
+                    port: jumpHost.port || 22,
+                    username: jumpAuth.username || "root",
+                    password: jumpAuth.password,
+                    privateKey: jumpKey?.privateKey,
+                    certificate: jumpKey?.certificate,
+                    passphrase: jumpAuth.passphrase || jumpKey?.passphrase,
+                    publicKey: jumpKey?.publicKey,
+                    keyId: jumpAuth.keyId,
+                    keySource: jumpKey?.source,
+                    label: jumpHost.label,
+                  };
+                });
+            }
+
             return {
               username: resolvedAuth.username,
               hostname: host.hostname,
@@ -1918,6 +1987,8 @@ const TerminalComponent: React.FC<TerminalProps> = ({
               publicKey: resolvedAuth.key?.publicKey,
               keyId: resolvedAuth.keyId,
               keySource: resolvedAuth.key?.source,
+              proxy: proxyConfig,
+              jumpHosts: jumpHosts && jumpHosts.length > 0 ? jumpHosts : undefined,
             };
           })()}
           open={showSFTP && status === "connected"}

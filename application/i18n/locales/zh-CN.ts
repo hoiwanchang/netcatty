@@ -22,6 +22,7 @@ const zhCN: Messages = {
   'common.noResultsFound': '没有匹配结果',
   'common.back': '返回',
   'common.apply': '应用',
+  'common.use': '使用',
   'common.left': '左侧',
   'common.right': '右侧',
   'common.selectAHost': '选择主机',
@@ -62,6 +63,17 @@ const zhCN: Messages = {
   'settings.application.github.subtitle': '源代码',
   'settings.application.whatsNew': '更新内容',
   'settings.application.whatsNew.subtitle': '查看发布说明',
+
+  // Update notifications
+  'update.available.title': '发现新版本',
+  'update.available.message': '新版本 {version} 已发布，点击前往下载。',
+  'update.checking': '正在检查更新...',
+  'update.upToDate.title': '已是最新版本',
+  'update.upToDate.message': '当前版本 ({version}) 已是最新。',
+  'update.error': '检查更新失败',
+  'update.downloadNow': '立即下载',
+  'update.remindLater': '稍后提醒',
+  'update.skipVersion': '跳过此版本',
 
   // Settings > Appearance
   'settings.appearance.uiTheme': '界面主题',
@@ -178,7 +190,7 @@ const zhCN: Messages = {
   'vault.hosts.header.live': '{count} 个在线',
 
   // Vault hosts header/actions
-  'vault.hosts.search.placeholder': '查找主机或 ssh user@hostname…',
+  'vault.hosts.search.placeholder': '查找主机或 ssh user@hostname / ssh -p 2222 user@hostname…',
   'vault.hosts.connect': '连接',
   'vault.view.grid': '网格',
   'vault.view.list': '列表',
@@ -334,6 +346,9 @@ const zhCN: Messages = {
   // Select Host panel
   'selectHost.title': '选择主机',
   'selectHost.noHostsFound': '未找到主机',
+  'selectHost.newHost': '新建主机',
+  'selectHost.continue': '继续',
+  'selectHost.continueWithCount': '继续（已选 {count} 个）',
 
   // Quick Connect
   'quickConnect.knownHost.title': '确认要连接吗？',
@@ -342,6 +357,7 @@ const zhCN: Messages = {
   'quickConnect.knownHost.addQuestion': '是否将它加入 Known Hosts？',
   'quickConnect.knownHost.addAndContinue': '加入并继续',
   'quickConnect.addKey': '添加 key',
+  'quickConnect.warning.unparsedOptions': '部分 SSH 参数已被忽略: {options}',
 
   // Protocol select dialog
   'protocolSelect.chooseProtocol': '选择协议',
@@ -545,6 +561,20 @@ const zhCN: Messages = {
   'cloudSync.s3.forcePathStyle': '强制使用 path-style URL（适用于 MinIO/R2 等）',
   'cloudSync.s3.showSecret': '显示密钥',
   'cloudSync.s3.validation.required': '端点、Region、Bucket、Access Key 与 Secret 必填。',
+  'cloudSync.smb.title': 'SMB 设置',
+  'cloudSync.smb.desc': '连接到 SMB/CIFS 文件共享以进行加密同步。',
+  'cloudSync.smb.share': '共享路径',
+  'cloudSync.smb.username': '用户名',
+  'cloudSync.smb.password': '密码',
+  'cloudSync.smb.domain': '域（可选）',
+  'cloudSync.smb.domainPlaceholder': '例如：WORKGROUP',
+  'cloudSync.smb.port': '端口（可选）',
+  'cloudSync.smb.showSecret': '显示密码',
+  'cloudSync.smb.validation.share': '共享路径必填。',
+  'cloudSync.smb.validation.port': '端口必须是 1 到 65535 之间的数字。',
+  'cloudSync.connect.smb.success': 'SMB 已连接',
+  'cloudSync.connect.smb.failedTitle': 'SMB 连接失败',
+  'cloudSync.provider.smb': 'SMB 共享',
   'cloudSync.connect.webdav.success': 'WebDAV 已连接',
   'cloudSync.connect.webdav.failedTitle': 'WebDAV 连接失败',
   'cloudSync.connect.s3.success': 'S3 已连接',
@@ -664,6 +694,9 @@ const zhCN: Messages = {
   'pf.view.list': '列表',
   'pf.rule.summary.dynamic': 'SOCKS 监听于 {bindAddress}:{localPort}',
   'pf.rule.summary.default': '{bindAddress}:{localPort} -> {remoteHost}:{remotePort}',
+  'pf.deleteActive.title': '删除正在运行的端口转发？',
+  'pf.deleteActive.desc': '端口转发规则 "{label}" 当前正在运行。删除前将先关闭转发连接。',
+  'pf.deleteActive.confirm': '关闭并删除',
 
   // SFTP (pane + conflict)
   'sftp.pane.local': '本地',
@@ -748,6 +781,20 @@ const zhCN: Messages = {
   'settings.terminal.llm.apiKey': 'API 密钥',
   'settings.terminal.llm.autoSuggestOnError': '命令错误时自动建议修复',
   'settings.terminal.llm.zebraStriping': '斑马条纹（交替显示命令背景色）',
+
+  // Settings > Terminal > Local Shell
+  'settings.terminal.section.localShell': '本地 Shell',
+  'settings.terminal.localShell.shell': 'Shell 可执行文件',
+  'settings.terminal.localShell.shell.desc': 'Shell 可执行文件的路径（例如 /bin/zsh、pwsh.exe）。留空使用系统默认。',
+  'settings.terminal.localShell.shell.placeholder': '系统默认',
+  'settings.terminal.localShell.shell.detected': '检测到',
+  'settings.terminal.localShell.shell.notFound': '未找到 Shell 可执行文件',
+  'settings.terminal.localShell.shell.isDirectory': '路径是目录，不是可执行文件',
+  'settings.terminal.localShell.startDir': '起始目录',
+  'settings.terminal.localShell.startDir.desc': '打开本地终端时的起始目录。留空使用用户主目录。',
+  'settings.terminal.localShell.startDir.placeholder': '用户主目录',
+  'settings.terminal.localShell.startDir.notFound': '目录不存在',
+  'settings.terminal.localShell.startDir.isFile': '路径是文件，不是目录',
 
   // Settings > Shortcuts
   'settings.shortcuts.section.scheme': '快捷键方案',
@@ -939,6 +986,37 @@ const zhCN: Messages = {
   'snippets.packageDialog.root': '根目录',
   'snippets.packageDialog.placeholder': '例如：ops/maintenance',
   'snippets.packageDialog.hint': '使用 "/" 创建嵌套代码包。',
+
+  // Serial Port
+  'serial.button': '串口',
+  'serial.modal.title': '连接串口',
+  'serial.modal.desc': '配置串口连接参数',
+  'serial.field.port': '串口',
+  'serial.field.selectPort': '选择串口...',
+  'serial.field.baudRate': '波特率',
+  'serial.field.dataBits': '数据位',
+  'serial.field.stopBits': '停止位',
+  'serial.field.parity': '校验位',
+  'serial.field.flowControl': '流控制',
+  'serial.noPorts': '未检测到串口设备。请连接设备后刷新。',
+  'serial.field.customPort': '自定义串口路径',
+  'serial.field.customPortPlaceholder': '例如 /dev/ttys001',
+  'serial.type.hardware': '硬件',
+  'serial.type.pseudo': '虚拟终端',
+  'serial.type.custom': '自定义',
+  'serial.parity.none': '无',
+  'serial.parity.even': '偶校验',
+  'serial.parity.odd': '奇校验',
+  'serial.parity.mark': 'Mark',
+  'serial.parity.space': 'Space',
+  'serial.flowControl.none': '无',
+  'serial.flowControl.xon/xoff': 'XON/XOFF (软件)',
+  'serial.flowControl.rts/cts': 'RTS/CTS (硬件)',
+  'serial.field.localEcho': '强制本地回显',
+  'serial.field.localEchoDesc': '本地回显输入字符（用于没有远程回显的设备）',
+  'serial.field.lineMode': '行模式',
+  'serial.field.lineModeDesc': '缓冲输入，按回车后发送（而不是逐字符发送）',
+  'serial.connectionError': '连接串口失败',
 };
 
 export default zhCN;

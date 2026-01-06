@@ -59,6 +59,7 @@ interface HostDetailsPanelProps {
   groups: string[];
   allTags?: string[]; // All available tags for autocomplete
   allHosts?: Host[]; // All hosts for chain selection
+  defaultGroup?: string | null; // Default group for new hosts (from current navigation)
   onSave: (host: Host) => void;
   onCancel: () => void;
   onCreateGroup?: (groupPath: string) => void; // Callback to create a new group
@@ -72,6 +73,7 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
   groups,
   allTags = [],
   allHosts = [],
+  defaultGroup,
   onSave,
   onCancel,
   onCreateGroup,
@@ -95,6 +97,7 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
         charset: "UTF-8",
         theme: "Flexoki Dark",
         createdAt: Date.now(),
+        group: defaultGroup || undefined, // Pre-fill with current navigation group
       } as Host),
   );
 
@@ -286,10 +289,10 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
     const base = identities;
     const filtered = q
       ? base.filter(
-          (i) =>
-            i.label.toLowerCase().includes(q) ||
-            i.username.toLowerCase().includes(q),
-        )
+        (i) =>
+          i.label.toLowerCase().includes(q) ||
+          i.username.toLowerCase().includes(q),
+      )
       : base;
     return filtered.slice(0, 6);
   }, [form.username, identities, selectedIdentity]);
@@ -639,10 +642,10 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
                             const q = next.toLowerCase().trim();
                             const matches = q
                               ? identities.filter(
-                                  (i) =>
-                                    i.label.toLowerCase().includes(q) ||
-                                    i.username.toLowerCase().includes(q),
-                                )
+                                (i) =>
+                                  i.label.toLowerCase().includes(q) ||
+                                  i.username.toLowerCase().includes(q),
+                              )
                               : identities;
                             setIdentitySuggestionsOpen(matches.length > 0);
                           }}
@@ -650,10 +653,10 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
                             const q = (form.username || "").toLowerCase().trim();
                             const matches = q
                               ? identities.filter(
-                                  (i) =>
-                                    i.label.toLowerCase().includes(q) ||
-                                    i.username.toLowerCase().includes(q),
-                                )
+                                (i) =>
+                                  i.label.toLowerCase().includes(q) ||
+                                  i.username.toLowerCase().includes(q),
+                              )
                               : identities;
                             setIdentitySuggestionsOpen(matches.length > 0);
                           }}
@@ -670,10 +673,10 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
                                 .trim();
                               const matches = q
                                 ? identities.filter(
-                                    (i) =>
-                                      i.label.toLowerCase().includes(q) ||
-                                      i.username.toLowerCase().includes(q),
-                                  )
+                                  (i) =>
+                                    i.label.toLowerCase().includes(q) ||
+                                    i.username.toLowerCase().includes(q),
+                                )
                                 : identities;
                               return matches.length > 0;
                             });
@@ -702,8 +705,8 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
                               {filteredIdentitySuggestions.map((identity) => {
                                 const keyLabel = identity.keyId
                                   ? availableKeys.find(
-                                      (k) => k.id === identity.keyId,
-                                    )?.label
+                                    (k) => k.id === identity.keyId,
+                                  )?.label
                                   : undefined;
                                 const methodLabel =
                                   identity.authMethod === "certificate"
@@ -850,42 +853,42 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
             {!selectedIdentity &&
               selectedCredentialType === "key" &&
               !form.identityFileId && (
-              <div className="flex items-center gap-1">
-                <Combobox
-                  options={keysByCategory.key.map((k) => ({
-                    value: k.id,
-                    label: k.label,
-                    sublabel: `${k.type}${k.keySize ? ` ${k.keySize}` : ""}`,
-                    icon: <Key size={14} className="text-muted-foreground" />,
-                  }))}
-                  value={form.identityFileId}
-                  onValueChange={(val) => {
-                    update("identityFileId", val);
-                    update("authMethod", "key");
-                    setSelectedCredentialType(null);
-                  }}
-                  placeholder={t("hostDetails.keys.search")}
-                  emptyText={t("hostDetails.keys.empty")}
-                  icon={<Key size={14} className="text-muted-foreground" />}
-                  className="flex-1"
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => setSelectedCredentialType(null)}
-                >
-                  <X size={14} />
-                </Button>
-              </div>
-            )}
+                <div className="flex items-center gap-1">
+                  <Combobox
+                    options={keysByCategory.key.map((k) => ({
+                      value: k.id,
+                      label: k.label,
+                      sublabel: `${k.type}${k.keySize ? ` ${k.keySize}` : ""}`,
+                      icon: <Key size={14} className="text-muted-foreground" />,
+                    }))}
+                    value={form.identityFileId}
+                    onValueChange={(val) => {
+                      update("identityFileId", val);
+                      update("authMethod", "key");
+                      setSelectedCredentialType(null);
+                    }}
+                    placeholder={t("hostDetails.keys.search")}
+                    emptyText={t("hostDetails.keys.empty")}
+                    icon={<Key size={14} className="text-muted-foreground" />}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={() => setSelectedCredentialType(null)}
+                  >
+                    <X size={14} />
+                  </Button>
+                </div>
+              )}
 
             {/* Certificate selection combobox - appears after selecting "Certificate" type */}
-	            {!selectedIdentity &&
-	              selectedCredentialType === "certificate" &&
-	              !form.identityFileId && (
-	                <div className="flex items-center gap-1">
-	                  <Combobox
+            {!selectedIdentity &&
+              selectedCredentialType === "certificate" &&
+              !form.identityFileId && (
+                <div className="flex items-center gap-1">
+                  <Combobox
                     options={keysByCategory.certificate.map((k) => ({
                       value: k.id,
                       label: k.label,
@@ -913,11 +916,11 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
                     onClick={() => setSelectedCredentialType(null)}
                   >
                     <X size={14} />
-	                  </Button>
-	                </div>
-	              )}
-	          </div>
-	        </Card>
+                  </Button>
+                </div>
+              )}
+          </div>
+        </Card>
 
         <Card className="p-3 space-y-3 bg-card border-border/80">
           <p className="text-xs font-semibold">

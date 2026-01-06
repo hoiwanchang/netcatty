@@ -215,6 +215,19 @@ const api = {
     const result = await ipcRenderer.invoke("netcatty:local:start", options || {});
     return result.sessionId;
   },
+  startSerialSession: async (options) => {
+    const result = await ipcRenderer.invoke("netcatty:serial:start", options);
+    return result.sessionId;
+  },
+  listSerialPorts: async () => {
+    return ipcRenderer.invoke("netcatty:serial:list");
+  },
+  getDefaultShell: async () => {
+    return ipcRenderer.invoke("netcatty:local:defaultShell");
+  },
+  validatePath: async (path, type) => {
+    return ipcRenderer.invoke("netcatty:local:validatePath", { path, type });
+  },
   writeToSession: (sessionId, data) => {
     ipcRenderer.send("netcatty:write", { sessionId, data });
   },

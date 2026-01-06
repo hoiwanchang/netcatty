@@ -688,6 +688,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
                 terminalSettings={terminalSettings}
                 sessionId={session.id}
                 startupCommand={session.startupCommand}
+                serialConfig={session.serialConfig}
                 onUpdateTerminalThemeId={onUpdateTerminalThemeId}
                 onUpdateTerminalFontFamilyId={onUpdateTerminalFontFamilyId}
                 onUpdateTerminalFontSize={onUpdateTerminalFontSize}

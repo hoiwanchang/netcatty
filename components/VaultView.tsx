@@ -17,6 +17,7 @@ import {
   TerminalSquare,
   Trash2,
   Upload,
+  Usb,
   Zap,
 } from "lucide-react";
 import React, { Suspense, lazy, memo, useCallback, useEffect, useMemo, useState } from "react";
@@ -34,6 +35,7 @@ import {
   HostProtocol,
   Identity,
   KnownHost,
+  SerialConfig,
   SSHKey,
   ShellHistoryEntry,
   Snippet,
@@ -48,7 +50,8 @@ import KeychainManager from "./KeychainManager";
 import KnownHostsManager from "./KnownHostsManager";
 import PortForwarding from "./PortForwardingNew";
 import QuickConnectWizard from "./QuickConnectWizard";
-import { isQuickConnectInput, parseQuickConnectInput } from "../domain/quickConnect";
+import { isQuickConnectInput, parseQuickConnectInputWithWarnings } from "../domain/quickConnect";
+import SerialConnectModal from "./SerialConnectModal";
 import SnippetsManager from "./SnippetsManager";
 import { ImportVaultDialog } from "./vault/ImportVaultDialog";
 import { Button } from "./ui/button";
@@ -92,6 +95,7 @@ interface VaultViewProps {
   onOpenSettings: () => void;
   onOpenQuickSwitcher: () => void;
   onCreateLocalTerminal: () => void;
+  onConnectSerial?: (config: SerialConfig) => void;
   onDeleteHost: (id: string) => void;
   onConnect: (host: Host) => void;
   onUpdateHosts: (hosts: Host[]) => void;
@@ -126,6 +130,7 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
   onOpenSettings,
   onOpenQuickSwitcher,
   onCreateLocalTerminal,
+  onConnectSerial,
   onDeleteHost,
   onConnect,
   onUpdateHosts,
@@ -158,6 +163,7 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
   const [renameGroupName, setRenameGroupName] = useState("");
   const [renameGroupError, setRenameGroupError] = useState<string | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isSerialModalOpen, setIsSerialModalOpen] = useState(false);
 
   // Handle external navigation requests
   useEffect(() => {
@@ -186,6 +192,7 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
     port?: number;
   } | null>(null);
   const [isQuickConnectOpen, setIsQuickConnectOpen] = useState(false);
+  const [quickConnectWarnings, setQuickConnectWarnings] = useState<string[]>([]);
 
   // Protocol select state (for hosts with multiple protocols)
   const [protocolSelectHost, setProtocolSelectHost] = useState<Host | null>(
@@ -200,9 +207,10 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
   // Handle connect button click - detect quick connect or regular search
   const handleConnectClick = useCallback(() => {
     if (isSearchQuickConnect) {
-      const target = parseQuickConnectInput(search);
-      if (target) {
-        setQuickConnectTarget(target);
+      const parsed = parseQuickConnectInputWithWarnings(search);
+      if (parsed.target) {
+        setQuickConnectTarget(parsed.target);
+        setQuickConnectWarnings(parsed.warnings);
         setIsQuickConnectOpen(true);
       }
     } else {
@@ -270,6 +278,7 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
       onConnect(host);
       setIsQuickConnectOpen(false);
       setQuickConnectTarget(null);
+      setQuickConnectWarnings([]);
       setSearch("");
     },
     [onConnect],
@@ -971,6 +980,18 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
               >
                 <TerminalSquare size={14} className="mr-2" /> {t("common.terminal")}
               </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                className={cn(
+                  "h-10 px-3 app-no-drag",
+                  currentSection === "hosts" &&
+                  "bg-foreground/5 text-foreground hover:bg-foreground/10 border-border/40",
+                )}
+                onClick={() => setIsSerialModalOpen(true)}
+              >
+                <Usb size={14} className="mr-2" /> {t("serial.button")}
+              </Button>
             </div>
           </header>
         )}
@@ -1322,6 +1343,7 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
           <PortForwarding
             hosts={hosts}
             keys={keys}
+            identities={identities}
             customGroups={customGroups}
             onSaveHost={(host) => onUpdateHosts([...hosts, host])}
             onCreateGroup={(groupPath) =>
@@ -1366,6 +1388,7 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
           )}
           allTags={allTags}
           allHosts={hosts}
+          defaultGroup={editingHost ? undefined : selectedGroupPath}
           onSave={(host) => {
             onUpdateHosts(
               editingHost
@@ -1497,7 +1520,9 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
           onClose={() => {
             setIsQuickConnectOpen(false);
             setQuickConnectTarget(null);
+            setQuickConnectWarnings([]);
           }}
+          warnings={quickConnectWarnings}
         />
       )}
 
@@ -1511,6 +1536,17 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
           />
         </Suspense>
       )}
+
+      {/* Serial Connect Modal */}
+      <SerialConnectModal
+        open={isSerialModalOpen}
+        onClose={() => setIsSerialModalOpen(false)}
+        onConnect={(config) => {
+          if (onConnectSerial) {
+            onConnectSerial(config);
+          }
+        }}
+      />
     </div>
   );
 };

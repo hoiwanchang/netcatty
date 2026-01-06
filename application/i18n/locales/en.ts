@@ -31,6 +31,7 @@ const en: Messages = {
   'common.noResultsFound': 'No results found',
   'common.back': 'Back',
   'common.apply': 'Apply',
+  'common.use': 'Use',
   'common.saveChanges': 'Save Changes',
   'common.advanced': 'Advanced',
   'common.left': 'Left',
@@ -74,6 +75,17 @@ const en: Messages = {
   'settings.application.github.subtitle': 'Source code',
   'settings.application.whatsNew': "What's new",
   'settings.application.whatsNew.subtitle': 'Show release notes',
+
+  // Update notifications
+  'update.available.title': 'Update Available',
+  'update.available.message': 'A new version {version} is available. Click to download.',
+  'update.checking': 'Checking for updates...',
+  'update.upToDate.title': 'Up to Date',
+  'update.upToDate.message': 'You are running the latest version ({version}).',
+  'update.error': 'Failed to check for updates',
+  'update.downloadNow': 'Download Now',
+  'update.remindLater': 'Remind Later',
+  'update.skipVersion': 'Skip This Version',
 
   // Settings > Appearance
   'settings.appearance.uiTheme': 'UI Theme',
@@ -189,6 +201,20 @@ const en: Messages = {
   'settings.terminal.llm.autoSuggestOnError': 'Auto-suggest fixes for errors',
   'settings.terminal.llm.zebraStriping': 'Zebra striping (alternating command backgrounds)',
 
+  // Local shell
+  'settings.terminal.section.localShell': 'Local Shell',
+  'settings.terminal.localShell.shell': 'Shell executable',
+  'settings.terminal.localShell.shell.desc': 'Path to the shell executable (e.g., /bin/zsh, pwsh.exe). Leave empty for system default.',
+  'settings.terminal.localShell.shell.placeholder': 'System default',
+  'settings.terminal.localShell.shell.detected': 'Detected',
+  'settings.terminal.localShell.shell.notFound': 'Shell executable not found',
+  'settings.terminal.localShell.shell.isDirectory': 'Path is a directory, not an executable',
+  'settings.terminal.localShell.startDir': 'Starting directory',
+  'settings.terminal.localShell.startDir.desc': 'Directory to start in when opening a local terminal. Leave empty for home directory.',
+  'settings.terminal.localShell.startDir.placeholder': 'Home directory',
+  'settings.terminal.localShell.startDir.notFound': 'Directory not found',
+  'settings.terminal.localShell.startDir.isFile': 'Path is a file, not a directory',
+
   // Settings > Shortcuts
   'settings.shortcuts.section.scheme': 'Hotkey Scheme',
   'settings.shortcuts.scheme.label': 'Keyboard shortcuts',
@@ -285,7 +311,7 @@ const en: Messages = {
   'vault.hosts.header.live': '{count} live',
 
   // Vault hosts header/actions
-  'vault.hosts.search.placeholder': 'Find a host or ssh user@hostname...',
+  'vault.hosts.search.placeholder': 'Find a host or ssh user@hostname / ssh -p 2222 user@hostname...',
   'vault.hosts.connect': 'Connect',
   'vault.view.grid': 'Grid',
   'vault.view.list': 'List',
@@ -384,6 +410,9 @@ const en: Messages = {
   'pf.view.list': 'List',
   'pf.rule.summary.dynamic': 'SOCKS on {bindAddress}:{localPort}',
   'pf.rule.summary.default': '{bindAddress}:{localPort} -> {remoteHost}:{remotePort}',
+  'pf.deleteActive.title': 'Delete Active Port Forwarding?',
+  'pf.deleteActive.desc': 'This port forwarding rule "{label}" is currently active. Deleting it will stop the tunnel first.',
+  'pf.deleteActive.confirm': 'Stop and Delete',
 
   // SFTP
   'sftp.newFolder': 'New Folder',
@@ -470,6 +499,9 @@ const en: Messages = {
   // Select Host panel
   'selectHost.title': 'Select Host',
   'selectHost.noHostsFound': 'No hosts found',
+  'selectHost.newHost': 'New Host',
+  'selectHost.continue': 'Continue',
+  'selectHost.continueWithCount': 'Continue ({count} selected)',
 
   // Quick Connect
   'quickConnect.knownHost.title': 'Are you sure you want to connect?',
@@ -478,6 +510,7 @@ const en: Messages = {
   'quickConnect.knownHost.addQuestion': 'Do you want to add it to the list of known hosts?',
   'quickConnect.knownHost.addAndContinue': 'Add and continue',
   'quickConnect.addKey': 'Add key',
+  'quickConnect.warning.unparsedOptions': 'Some SSH arguments were ignored: {options}',
 
   // Terminal
   'terminal.connectionErrorTitle': 'Connection Error',
@@ -714,6 +747,20 @@ const en: Messages = {
   'cloudSync.s3.forcePathStyle': 'Force path-style URLs (for MinIO/R2, etc.)',
   'cloudSync.s3.showSecret': 'Show secrets',
   'cloudSync.s3.validation.required': 'Endpoint, region, bucket, access key, and secret are required.',
+  'cloudSync.smb.title': 'SMB Settings',
+  'cloudSync.smb.desc': 'Connect to an SMB/CIFS file share for encrypted sync.',
+  'cloudSync.smb.share': 'Share Path',
+  'cloudSync.smb.username': 'Username',
+  'cloudSync.smb.password': 'Password',
+  'cloudSync.smb.domain': 'Domain (optional)',
+  'cloudSync.smb.domainPlaceholder': 'e.g., WORKGROUP',
+  'cloudSync.smb.port': 'Port (optional)',
+  'cloudSync.smb.showSecret': 'Show password',
+  'cloudSync.smb.validation.share': 'Share path is required.',
+  'cloudSync.smb.validation.port': 'Port must be a number between 1 and 65535.',
+  'cloudSync.connect.smb.success': 'SMB connected successfully',
+  'cloudSync.connect.smb.failedTitle': 'SMB connection failed',
+  'cloudSync.provider.smb': 'SMB Share',
   'cloudSync.connect.webdav.success': 'WebDAV connected successfully',
   'cloudSync.connect.webdav.failedTitle': 'WebDAV connection failed',
   'cloudSync.connect.s3.success': 'S3 connected successfully',
@@ -950,6 +997,37 @@ const en: Messages = {
   'snippets.packageDialog.root': 'Root',
   'snippets.packageDialog.placeholder': 'e.g. ops/maintenance',
   'snippets.packageDialog.hint': 'Use "/" to create nested packages.',
+
+  // Serial Port
+  'serial.button': 'Serial',
+  'serial.modal.title': 'Connect to Serial Port',
+  'serial.modal.desc': 'Configure serial port connection settings',
+  'serial.field.port': 'Serial Port',
+  'serial.field.selectPort': 'Select a port...',
+  'serial.field.baudRate': 'Baud Rate',
+  'serial.field.dataBits': 'Data Bits',
+  'serial.field.stopBits': 'Stop Bits',
+  'serial.field.parity': 'Parity',
+  'serial.field.flowControl': 'Flow Control',
+  'serial.noPorts': 'No serial ports detected. Connect a device and refresh.',
+  'serial.field.customPort': 'Custom Port Path',
+  'serial.field.customPortPlaceholder': 'e.g. /dev/ttys001',
+  'serial.type.hardware': 'Hardware',
+  'serial.type.pseudo': 'Pseudo Terminal',
+  'serial.type.custom': 'Custom',
+  'serial.parity.none': 'None',
+  'serial.parity.even': 'Even',
+  'serial.parity.odd': 'Odd',
+  'serial.parity.mark': 'Mark',
+  'serial.parity.space': 'Space',
+  'serial.flowControl.none': 'None',
+  'serial.flowControl.xon/xoff': 'XON/XOFF (Software)',
+  'serial.flowControl.rts/cts': 'RTS/CTS (Hardware)',
+  'serial.field.localEcho': 'Force Local Echo',
+  'serial.field.localEchoDesc': 'Echo typed characters locally (for devices without remote echo)',
+  'serial.field.lineMode': 'Line Mode',
+  'serial.field.lineModeDesc': 'Buffer input and send on Enter (instead of character-by-character)',
+  'serial.connectionError': 'Failed to connect to serial port',
 };
 
 export default en;

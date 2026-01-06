@@ -3,7 +3,7 @@ import type { SerializeAddon } from "@xterm/addon-serialize";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { logger } from "../../../lib/logger";
-import type { Host, Identity, SSHKey, TerminalSession, TerminalSettings } from "../../../types";
+import type { Host, Identity, SerialConfig, SSHKey, TerminalSession, TerminalSettings } from "../../../types";
 import { resolveHostAuth } from "../../../domain/sshAuth";
 
 type TerminalBackendApi = {
@@ -11,6 +11,7 @@ type TerminalBackendApi = {
   telnetAvailable: () => boolean;
   moshAvailable: () => boolean;
   localAvailable: () => boolean;
+  serialAvailable: () => boolean;
   execAvailable: () => boolean;
   startSSHSession: (options: NetcattySSHOptions) => Promise<string>;
   startTelnetSession: (
@@ -21,6 +22,9 @@ type TerminalBackendApi = {
   ) => Promise<string>;
   startLocalSession: (
     options: Parameters<NonNullable<NetcattyBridge["startLocalSession"]>>[0],
+  ) => Promise<string>;
+  startSerialSession: (
+    options: Parameters<NonNullable<NetcattyBridge["startSerialSession"]>>[0],
   ) => Promise<string>;
   execCommand: (options: Parameters<NetcattyBridge["execCommand"]>[0]) => Promise<{
     stdout?: string;
@@ -61,6 +65,7 @@ export type TerminalSessionStartersContext = {
   startupCommand?: string;
   terminalSettings?: TerminalSettings;
   terminalBackend: TerminalBackendApi;
+  serialConfig?: SerialConfig;
 
   sessionRef: RefObject<string | null>;
   hasConnectedRef: RefObject<boolean>;
@@ -114,12 +119,21 @@ const attachSessionToTerminal = (
   opts?: {
     onExitMessage?: (evt: { exitCode?: number; signal?: number }) => string;
     onConnected?: () => void;
+    // For serial: convert lone LF to CRLF to avoid "staircase effect"
+    convertLfToCrlf?: boolean;
   },
 ) => {
   ctx.sessionRef.current = id;
 
   ctx.disposeDataRef.current = ctx.terminalBackend.onSessionData(id, (chunk) => {
-    term.write(ctx.highlightProcessorRef.current(chunk));
+    let data = chunk;
+    // Convert lone LF (\n) to CRLF (\r\n) for proper terminal display
+    // This prevents the "staircase effect" common in serial terminals
+    if (opts?.convertLfToCrlf) {
+      // Replace \n that is not preceded by \r with \r\n
+      data = data.replace(/(?<!\r)\n/g, "\r\n");
+    }
+    term.write(ctx.highlightProcessorRef.current(data));
     if (ctx.terminalSettings?.scrollOnOutput) {
       term.scrollToBottom();
     }
@@ -524,10 +538,16 @@ export const createTerminalSessionStarters = (ctx: TerminalSessionStartersContex
     }
 
     try {
+      // Get local shell configuration from terminal settings
+      const localShell = ctx.terminalSettings?.localShell;
+      const localStartDir = ctx.terminalSettings?.localStartDir;
+
       const id = await ctx.terminalBackend.startLocalSession({
         sessionId: ctx.sessionId,
         cols: term.cols,
         rows: term.rows,
+        shell: localShell,
+        cwd: localStartDir,
         env: {
           TERM: ctx.terminalSettings?.terminalEmulationType ?? "xterm-256color",
         },
@@ -587,5 +607,50 @@ export const createTerminalSessionStarters = (ctx: TerminalSessionStartersContex
     }
   };
 
-  return { startSSH, startTelnet, startMosh, startLocal };
+  // Start Serial session
+  const startSerial = async (term: XTerm) => {
+    if (!ctx.serialConfig) {
+      ctx.setError("No serial configuration provided");
+      term.writeln("\r\n[Error: No serial configuration provided]");
+      ctx.updateStatus("disconnected");
+      return;
+    }
+
+    try {
+      logger.info("[Serial] Starting serial session", {
+        port: ctx.serialConfig.path,
+        baudRate: ctx.serialConfig.baudRate,
+      });
+
+      const id = await ctx.terminalBackend.startSerialSession({
+        sessionId: ctx.sessionId,
+        path: ctx.serialConfig.path,
+        baudRate: ctx.serialConfig.baudRate,
+        dataBits: ctx.serialConfig.dataBits,
+        stopBits: ctx.serialConfig.stopBits,
+        parity: ctx.serialConfig.parity,
+        flowControl: ctx.serialConfig.flowControl,
+      });
+
+      // Serial connection is established immediately when session starts
+      // Update status right away since serial ports don't require handshake
+      ctx.updateStatus("connected");
+      ctx.setProgressValue(100);
+      term.writeln(`[Connected to ${ctx.serialConfig.path} at ${ctx.serialConfig.baudRate} baud]`);
+
+      attachSessionToTerminal(ctx, term, id, {
+        onExitMessage: (evt) =>
+          `\r\n[serial port closed${evt?.exitCode !== undefined ? ` (code ${evt.exitCode})` : ""}]`,
+        // Convert lone LF to CRLF to prevent "staircase effect" in serial terminals
+        convertLfToCrlf: true,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      ctx.setError(message);
+      term.writeln(`\r\n[Failed to connect to serial port: ${message}]`);
+      ctx.updateStatus("disconnected");
+    }
+  };
+
+  return { startSSH, startTelnet, startMosh, startLocal, startSerial };
 };

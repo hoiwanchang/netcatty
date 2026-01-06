@@ -30,6 +30,7 @@ interface SelectHostPanelProps {
   onNewHost?: () => void;
   // Props for inline host creation
   availableKeys?: SSHKey[];
+  identities?: import('../domain/models').Identity[];
   onSaveHost?: (host: Host) => void;
   onCreateGroup?: (groupPath: string) => void;
   title?: string;
@@ -47,6 +48,7 @@ const SelectHostPanel: React.FC<SelectHostPanelProps> = ({
   onContinue,
   onNewHost,
   availableKeys = [],
+  identities = [],
   onSaveHost,
   onCreateGroup,
   title,
@@ -203,7 +205,7 @@ const SelectHostPanel: React.FC<SelectHostPanelProps> = ({
   return (
     <div
       className={cn(
-        "absolute right-0 top-0 bottom-0 w-[380px] border-l border-border/60 bg-background z-30 flex flex-col app-no-drag",
+        "absolute right-0 top-0 bottom-0 w-[380px] border-l border-border/60 bg-background z-40 flex flex-col app-no-drag",
         className,
       )}
     >
@@ -247,7 +249,7 @@ const SelectHostPanel: React.FC<SelectHostPanelProps> = ({
             }}
           >
             <Plus size={14} />
-            NEW HOST
+            {t('selectHost.newHost')}
           </Button>
         )}
         <div className="relative flex-1 max-w-xs">
@@ -256,7 +258,7 @@ const SelectHostPanel: React.FC<SelectHostPanelProps> = ({
             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
           />
           <Input
-            placeholder="Search"
+            placeholder={t('common.searchPlaceholder')}
             className="h-8 pl-8"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -393,8 +395,8 @@ const SelectHostPanel: React.FC<SelectHostPanelProps> = ({
           }}
         >
           {multiSelect
-            ? `Continue (${selectedHostIds.length} selected)`
-            : "Continue"}
+            ? t('selectHost.continueWithCount', { count: selectedHostIds.length })
+            : t('selectHost.continue')}
         </Button>
       </div>
 
@@ -403,6 +405,7 @@ const SelectHostPanel: React.FC<SelectHostPanelProps> = ({
         <HostDetailsPanel
           initialData={null}
           availableKeys={availableKeys}
+          identities={identities}
           groups={customGroups}
           allHosts={hosts}
           onSave={(host) => {

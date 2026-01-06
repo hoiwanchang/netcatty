@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Check,
   ChevronDown,
   Globe,
@@ -26,6 +27,14 @@ import {
   AsidePanelFooter,
 } from "./ui/aside-panel";
 import { Button } from "./ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 import { Dropdown, DropdownContent, DropdownTrigger } from "./ui/dropdown";
 import { Input } from "./ui/input";
 import { SortDropdown } from "./ui/sort-dropdown";
@@ -53,6 +62,7 @@ type WizardStep =
 interface PortForwardingProps {
   hosts: Host[];
   keys: SSHKey[];
+  identities?: import('../domain/models').Identity[];
   customGroups: string[];
   onNewHost?: () => void;
   onSaveHost?: (host: Host) => void;
@@ -62,6 +72,7 @@ interface PortForwardingProps {
 const PortForwarding: React.FC<PortForwardingProps> = ({
   hosts,
   keys,
+  identities = [],
   customGroups: _customGroups,
   onNewHost: _onNewHost,
   onSaveHost,
@@ -204,6 +215,11 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
 
   // New forwarding menu
   const [showNewMenu, setShowNewMenu] = useState(false);
+
+  // Delete confirmation dialog state for active tunnels
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [ruleToDelete, setRuleToDelete] = useState<PortForwardingRule | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Reset wizard
   const resetWizard = () => {
@@ -356,12 +372,50 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
   };
 
   // Close edit panel
-  const closeEditPanel = () => {
+  const closeEditPanel = useCallback(() => {
     setShowEditPanel(false);
     setEditingRule(null);
     setEditDraft({});
     setSelectedRuleId(null);
-  };
+  }, [setSelectedRuleId]);
+
+  // Handle delete with confirmation for active tunnels
+  const handleDeleteRule = useCallback(
+    (rule: PortForwardingRule) => {
+      // If tunnel is active or connecting, show confirmation dialog
+      if (rule.status === "active" || rule.status === "connecting") {
+        setRuleToDelete(rule);
+        setShowDeleteConfirm(true);
+      } else {
+        // If inactive, delete directly
+        if (editingRule?.id === rule.id) {
+          closeEditPanel();
+        }
+        deleteRule(rule.id);
+      }
+    },
+    [editingRule, deleteRule, closeEditPanel],
+  );
+
+  // Confirm delete of active tunnel: stop first, then delete
+  const confirmDeleteActiveRule = useCallback(async () => {
+    if (!ruleToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      // Stop the tunnel first
+      await stopTunnel(ruleToDelete.id);
+      // Then delete the rule
+      if (editingRule?.id === ruleToDelete.id) {
+        closeEditPanel();
+      }
+      deleteRule(ruleToDelete.id);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+      setRuleToDelete(null);
+    }
+  }, [ruleToDelete, stopTunnel, deleteRule, editingRule, closeEditPanel]);
 
   // Handle wizard navigation
   // Flow for local: type -> local-config -> destination -> host-selection
@@ -652,12 +706,7 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
                     }}
                     onEdit={() => startEditRule(rule)}
                     onDuplicate={() => duplicateRule(rule.id)}
-                    onDelete={() => {
-                      if (editingRule?.id === rule.id) {
-                        closeEditPanel();
-                      }
-                      deleteRule(rule.id);
-                    }}
+                    onDelete={() => handleDeleteRule(rule)}
                     onStart={() => handleStartTunnel(rule)}
                     onStop={() => handleStopTunnel(rule)}
                   />
@@ -683,10 +732,7 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
             duplicateRule(editingRule.id);
             closeEditPanel();
           }}
-          onDelete={() => {
-            deleteRule(editingRule.id);
-            closeEditPanel();
-          }}
+          onDelete={() => handleDeleteRule(editingRule)}
           onOpenHostSelector={() => setShowHostSelector(true)}
         />
       )}
@@ -796,9 +842,9 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
           onBack={() => setShowHostSelector(false)}
           onContinue={() => setShowHostSelector(false)}
           availableKeys={keys}
+          identities={identities}
           onSaveHost={onSaveHost}
           onCreateGroup={_onCreateGroup}
-          title="Select Host"
         />
       )}
 
@@ -817,6 +863,45 @@ const PortForwarding: React.FC<PortForwardingProps> = ({
           isValid={isNewFormValid()}
         />
       )}
+
+      {/* Delete Active Tunnel Confirmation Dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={(open) => {
+        if (!isDeleting) {
+          setShowDeleteConfirm(open);
+          if (!open) setRuleToDelete(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle size={20} />
+              {t("pf.deleteActive.title")}
+            </DialogTitle>
+            <DialogDescription>
+              {t("pf.deleteActive.desc", { label: ruleToDelete?.label ?? "" })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteConfirm(false);
+                setRuleToDelete(null);
+              }}
+              disabled={isDeleting}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteActiveRule}
+              disabled={isDeleting}
+            >
+              {t("pf.deleteActive.confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

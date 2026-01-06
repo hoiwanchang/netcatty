@@ -376,6 +376,7 @@ export const SYNC_STORAGE_KEYS = {
   PROVIDER_ONEDRIVE: 'netcatty_provider_onedrive_v1',
   PROVIDER_WEBDAV: 'netcatty_provider_webdav_v1',
   PROVIDER_S3: 'netcatty_provider_s3_v1',
+  PROVIDER_SMB: 'netcatty_provider_smb_v1',
   LOCAL_SYNC_META: 'netcatty_local_sync_meta_v1',
 } as const;
 

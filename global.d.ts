@@ -1,5 +1,5 @@
 import type { RemoteFile } from "./types";
-import type { S3Config, SyncedFile, WebDAVConfig } from "./domain/sync";
+import type { S3Config, SMBConfig, SyncedFile, WebDAVConfig } from "./domain/sync";
 
 declare global {
 // Proxy configuration for SSH connections
@@ -134,7 +134,26 @@ interface NetcattyBridge {
     charset?: string;
     env?: Record<string, string>;
   }): Promise<string>;
-  startLocalSession?(options: { sessionId?: string; cols?: number; rows?: number; shell?: string; env?: Record<string, string> }): Promise<string>;
+  startLocalSession?(options: { sessionId?: string; cols?: number; rows?: number; shell?: string; cwd?: string; env?: Record<string, string> }): Promise<string>;
+  startSerialSession?(options: {
+    sessionId?: string;
+    path: string;
+    baudRate?: number;
+    dataBits?: 5 | 6 | 7 | 8;
+    stopBits?: 1 | 1.5 | 2;
+    parity?: 'none' | 'even' | 'odd' | 'mark' | 'space';
+    flowControl?: 'none' | 'xon/xoff' | 'rts/cts';
+  }): Promise<string>;
+  listSerialPorts?(): Promise<Array<{
+    path: string;
+    manufacturer: string;
+    serialNumber: string;
+    vendorId: string;
+    productId: string;
+    pnpId: string;
+  }>>;
+  getDefaultShell?(): Promise<string>;
+  validatePath?(path: string, type?: 'file' | 'directory' | 'any'): Promise<{ exists: boolean; isFile: boolean; isDirectory: boolean }>;
   generateKeyPair?(options: {
     type: 'RSA' | 'ECDSA' | 'ED25519';
     bits?: number;
@@ -265,6 +284,14 @@ interface NetcattyBridge {
   ): Promise<{ resourceId: string }>;
   cloudSyncS3Download?(config: S3Config): Promise<{ syncedFile: SyncedFile | null }>;
   cloudSyncS3Delete?(config: S3Config): Promise<{ ok: true }>;
+
+  cloudSyncSmbInitialize?(config: SMBConfig): Promise<{ resourceId: string | null }>;
+  cloudSyncSmbUpload?(
+    config: SMBConfig,
+    syncedFile: SyncedFile
+  ): Promise<{ resourceId: string }>;
+  cloudSyncSmbDownload?(config: SMBConfig): Promise<{ syncedFile: SyncedFile | null }>;
+  cloudSyncSmbDelete?(config: SMBConfig): Promise<{ ok: true }>;
   
   // Port Forwarding
   startPortForward?(options: PortForwardOptions): Promise<PortForwardResult>;

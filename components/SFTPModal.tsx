@@ -233,6 +233,8 @@ interface SFTPModalProps {
     publicKey?: string;
     keyId?: string;
     keySource?: 'generated' | 'imported';
+    proxy?: NetcattyProxyConfig;
+    jumpHosts?: NetcattyJumpHost[];
   };
   open: boolean;
   onClose: () => void;
@@ -445,6 +447,8 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
       publicKey: credentials.publicKey,
       keyId: credentials.keyId,
       keySource: credentials.keySource,
+      proxy: credentials.proxy,
+      jumpHosts: credentials.jumpHosts,
     });
     sftpIdRef.current = sftpId;
     return sftpId;
@@ -461,6 +465,8 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
     credentials.publicKey,
     credentials.keyId,
     credentials.keySource,
+    credentials.proxy,
+    credentials.jumpHosts,
     openSftp,
   ]);
 
@@ -743,14 +749,14 @@ const SFTPModal: React.FC<SFTPModalProps> = ({
       return true;
     } catch (e) {
       setUploadTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
+        prev.map((task) =>
+          task.id === taskId
             ? {
-              ...t,
+              ...task,
               status: "failed" as const,
               error: e instanceof Error ? e.message : t("sftp.error.uploadFailed"),
             }
-            : t,
+            : task,
         ),
       );
       return false;
