@@ -45,6 +45,7 @@ export type CreateXTermRuntimeContext = {
   host: Host;
   fontFamilyId: string;
   fontSize: number;
+  customFontFamilies?: Record<string, string>;
   terminalTheme: TerminalTheme;
   terminalSettingsRef: RefObject<TerminalSettings | undefined>;
   terminalBackend: TerminalBackendApi;
@@ -114,8 +115,9 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
   });
 
   const hostFontId = ctx.host.fontFamily || ctx.fontFamilyId || "menlo";
+  const customFamily = ctx.customFontFamilies?.[hostFontId];
   const fontObj = TERMINAL_FONTS.find((f) => f.id === hostFontId) || TERMINAL_FONTS[0];
-  const fontFamily = fontObj.family;
+  const fontFamily = customFamily || fontObj.family;
 
   const effectiveFontSize = ctx.host.fontSize || ctx.fontSize;
 
@@ -123,7 +125,6 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
   const cursorStyle = settings?.cursorShape ?? "block";
   const cursorBlink = settings?.cursorBlink ?? true;
   const scrollback = settings?.scrollback ?? 10000;
-  const fontLigatures = settings?.fontLigatures ?? true;
   const drawBoldTextInBrightColors = settings?.drawBoldInBrightColors ?? true;
   const fontWeight = settings?.fontWeight ?? 400;
   const fontWeightBold = settings?.fontWeightBold ?? 700;
@@ -165,7 +166,7 @@ export const createXTermRuntime = (ctx: CreateXTermRuntimeContext): XTermRuntime
     cursorStyle,
     cursorBlink,
     scrollback,
-    allowProposedApi: fontLigatures,
+    allowProposedApi: true,
     drawBoldTextInBrightColors,
     minimumContrastRatio,
     scrollOnUserInput,

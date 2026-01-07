@@ -19,6 +19,7 @@ const DEFAULT_ENABLED_BY_ID: Record<string, boolean> = {
   zebra: false,
   commandCandidates: false,
   serverStatus: false,
+  portKnocking: false,
 };
 
 const buildDefaultState = (): PluginsState => ({
@@ -96,6 +97,8 @@ type PluginsContextValue = {
   isEnabled: (id: string) => boolean;
   setEnabled: (id: string, enabled: boolean) => void;
   toggle: (id: string) => void;
+  getPluginSettings: (id: string) => unknown;
+  setPluginSettings: (id: string, settings: unknown) => void;
   definitions: PluginListItem[];
   installFromZip: (file: File) => Promise<InstalledPluginManifest>;
   updateFromZip: (id: string, file: File) => Promise<InstalledPluginManifest>;
@@ -109,12 +112,38 @@ export const PluginsProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const initial = useMemo(() => readPluginsState(), []);
   const legacyInstalledRef = useRef<Record<string, InstalledPluginManifest>>(initial.legacyInstalled);
 
+  // Prevent echo-writes when state is updated via storage-event sync from another window.
+  const suppressNextWriteRef = useRef(false);
+
   const [state, setState] = useState<PluginsState>(() => initial.persisted);
   const [installed, setInstalled] = useState<Record<string, InstalledPluginManifest>>({});
 
   useEffect(() => {
+    if (suppressNextWriteRef.current) {
+      suppressNextWriteRef.current = false;
+      return;
+    }
     localStorageAdapter.write(STORAGE_KEY_PLUGINS, state);
   }, [state]);
+
+  // Keep multiple renderer windows in sync (e.g. Settings window toggles plugins, main window UI updates live).
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== STORAGE_KEY_PLUGINS) return;
+      const next = readPluginsState().persisted;
+      setState((prev) => {
+        // Cheap equality check to avoid pointless re-renders.
+        const prevJson = JSON.stringify(prev);
+        const nextJson = JSON.stringify(next);
+        if (prevJson === nextJson) return prev;
+        suppressNextWriteRef.current = true;
+        return next;
+      });
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const refreshInstalled = useCallback(async () => {
     const api = netcattyBridge.get();
@@ -199,6 +228,19 @@ export const PluginsProvider: React.FC<{ children: React.ReactNode }> = ({ child
       enabled: {
         ...prev.enabled,
         [id]: !prev.enabled[id],
+      },
+    }));
+  }, []);
+
+  const getPluginSettings = useCallback((id: string) => state.pluginSettings[id], [state.pluginSettings]);
+
+  const setPluginSettings = useCallback((id: string, settings: unknown) => {
+    setState((prev) => ({
+      ...prev,
+      schemaVersion: 2,
+      pluginSettings: {
+        ...prev.pluginSettings,
+        [id]: settings,
       },
     }));
   }, []);
@@ -307,13 +349,27 @@ export const PluginsProvider: React.FC<{ children: React.ReactNode }> = ({ child
       isEnabled,
       setEnabled,
       toggle,
+      getPluginSettings,
+      setPluginSettings,
       definitions,
       installFromZip,
       updateFromZip,
       deletePlugin,
       setGitRepositoryUrl,
     }),
-    [state, isEnabled, setEnabled, toggle, definitions, installFromZip, updateFromZip, deletePlugin, setGitRepositoryUrl],
+    [
+      state,
+      isEnabled,
+      setEnabled,
+      toggle,
+      getPluginSettings,
+      setPluginSettings,
+      definitions,
+      installFromZip,
+      updateFromZip,
+      deletePlugin,
+      setGitRepositoryUrl,
+    ],
   );
 
   return <PluginsContext.Provider value={value}>{children}</PluginsContext.Provider>;
@@ -329,6 +385,8 @@ export const usePlugins = (): PluginsContextValue => {
       isEnabled: (id: string) => Boolean(fallback.persisted.enabled[id]) && Boolean(fallback.legacyInstalled[id]),
       setEnabled: () => {},
       toggle: () => {},
+      getPluginSettings: () => undefined,
+      setPluginSettings: () => {},
       definitions,
       installFromZip: async () => {
         throw new PluginZipError('PluginsProvider is not available');

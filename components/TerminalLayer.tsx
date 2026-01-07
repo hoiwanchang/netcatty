@@ -44,6 +44,7 @@ interface TerminalLayerProps {
   terminalTheme: TerminalTheme;
   terminalSettings?: TerminalSettings;
   terminalFontFamilyId: string;
+  customFontFamilies?: Record<string, string>;
   fontSize?: number;
   hotkeyScheme?: 'disabled' | 'mac' | 'pc';
   keyBindings?: KeyBinding[];
@@ -83,6 +84,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
   terminalTheme,
   terminalSettings,
   terminalFontFamilyId,
+  customFontFamilies,
   fontSize = 14,
   hotkeyScheme = 'disabled',
   keyBindings = [],
@@ -684,6 +686,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
                 serverStatus={activeSessionStatus && activeSessionStatus.sessionId === session.id ? activeSessionStatus : null}
                 fontFamilyId={terminalFontFamilyId}
                 fontSize={fontSize}
+                customFontFamilies={customFontFamilies}
                 terminalTheme={terminalTheme}
                 terminalSettings={terminalSettings}
                 sessionId={session.id}

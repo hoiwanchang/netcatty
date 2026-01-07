@@ -1,5 +1,5 @@
 import { useCallback,useEffect,useLayoutEffect,useMemo,useState } from 'react';
-import { SyncConfig, TerminalSettings, DEFAULT_TERMINAL_SETTINGS, HotkeyScheme, CustomKeyBindings, DEFAULT_KEY_BINDINGS, KeyBinding, UILanguage } from '../../domain/models';
+import { SyncConfig, TerminalSettings, DEFAULT_TERMINAL_SETTINGS, HotkeyScheme, CustomKeyBindings, DEFAULT_KEY_BINDINGS, KeyBinding, UILanguage, TerminalCustomFontAsset } from '../../domain/models';
 import {
 STORAGE_KEY_COLOR,
 STORAGE_KEY_SYNC,
@@ -7,6 +7,7 @@ STORAGE_KEY_TERM_THEME,
 STORAGE_KEY_THEME,
 STORAGE_KEY_TERM_FONT_FAMILY,
 STORAGE_KEY_TERM_FONT_SIZE,
+STORAGE_KEY_TERM_CUSTOM_FONTS,
 STORAGE_KEY_TERM_SETTINGS,
 STORAGE_KEY_HOTKEY_SCHEME,
 STORAGE_KEY_CUSTOM_KEY_BINDINGS,
@@ -130,6 +131,10 @@ export const useSettingsState = () => {
   const [terminalThemeId, setTerminalThemeId] = useState<string>(() => localStorageAdapter.readString(STORAGE_KEY_TERM_THEME) || DEFAULT_TERMINAL_THEME);
   const [terminalFontFamilyId, setTerminalFontFamilyId] = useState<string>(() => localStorageAdapter.readString(STORAGE_KEY_TERM_FONT_FAMILY) || DEFAULT_FONT_FAMILY);
   const [terminalFontSize, setTerminalFontSize] = useState<number>(() => localStorageAdapter.readNumber(STORAGE_KEY_TERM_FONT_SIZE) || DEFAULT_FONT_SIZE);
+  const [terminalCustomFonts, setTerminalCustomFonts] = useState<TerminalCustomFontAsset[]>(() => {
+    const stored = localStorageAdapter.read<TerminalCustomFontAsset[]>(STORAGE_KEY_TERM_CUSTOM_FONTS);
+    return Array.isArray(stored) ? stored : [];
+  });
   const [uiLanguage, setUiLanguage] = useState<UILanguage>(() => {
     const stored = readStoredString(STORAGE_KEY_UI_LANGUAGE);
     return resolveSupportedLocale(stored || DEFAULT_UI_LOCALE);
@@ -245,6 +250,20 @@ export const useSettingsState = () => {
       }
       if (key === STORAGE_KEY_TERM_FONT_SIZE && typeof value === 'number') {
         setTerminalFontSize(value);
+      }
+      if (key === STORAGE_KEY_TERM_CUSTOM_FONTS) {
+        if (Array.isArray(value)) {
+          setTerminalCustomFonts(value as TerminalCustomFontAsset[]);
+        } else if (typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value) as unknown;
+            if (Array.isArray(parsed)) {
+              setTerminalCustomFonts(parsed as TerminalCustomFontAsset[]);
+            }
+          } catch {
+            // ignore parse errors
+          }
+        }
       }
       if (key === STORAGE_KEY_HOTKEY_SCHEME && (value === 'disabled' || value === 'mac' || value === 'pc')) {
         setHotkeyScheme(value);
@@ -371,11 +390,23 @@ export const useSettingsState = () => {
           setTerminalFontSize(newSize);
         }
       }
+
+      // Sync terminal custom fonts from other windows
+      if (e.key === STORAGE_KEY_TERM_CUSTOM_FONTS && e.newValue !== null) {
+        try {
+          const parsed = JSON.parse(e.newValue) as unknown;
+          if (Array.isArray(parsed)) {
+            setTerminalCustomFonts(parsed as TerminalCustomFontAsset[]);
+          }
+        } catch {
+          // ignore parse errors
+        }
+      }
     };
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [theme, lightUiThemeId, darkUiThemeId, accentMode, customAccent, customCSS, hotkeyScheme, uiLanguage, terminalThemeId, terminalFontFamilyId, terminalFontSize]);
+  }, [theme, lightUiThemeId, darkUiThemeId, accentMode, customAccent, customCSS, hotkeyScheme, uiLanguage, terminalThemeId, terminalFontFamilyId, terminalFontSize, terminalCustomFonts]);
 
   useEffect(() => {
     localStorageAdapter.writeString(STORAGE_KEY_TERM_THEME, terminalThemeId);
@@ -391,6 +422,52 @@ export const useSettingsState = () => {
     localStorageAdapter.writeNumber(STORAGE_KEY_TERM_FONT_SIZE, terminalFontSize);
     notifySettingsChanged(STORAGE_KEY_TERM_FONT_SIZE, terminalFontSize);
   }, [terminalFontSize, notifySettingsChanged]);
+
+  useEffect(() => {
+    localStorageAdapter.write(STORAGE_KEY_TERM_CUSTOM_FONTS, terminalCustomFonts);
+    notifySettingsChanged(STORAGE_KEY_TERM_CUSTOM_FONTS, terminalCustomFonts);
+  }, [terminalCustomFonts, notifySettingsChanged]);
+
+  // Apply custom terminal fonts (data: URLs) to document
+  useEffect(() => {
+    let styleEl = document.getElementById('netcatty-custom-fonts') as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'netcatty-custom-fonts';
+      document.head.appendChild(styleEl);
+    }
+
+    const css = terminalCustomFonts
+      .filter((f) => f && f.id && f.dataBase64)
+      .map((f) => {
+        const safeFamily = JSON.stringify(f.id);
+        const safeMime = (f.mime || 'font/ttf').replace(/[^a-zA-Z0-9+\-./]/g, '');
+        const data = f.dataBase64;
+        return `@font-face{font-family:${safeFamily};src:url(data:${safeMime};base64,${data})}`;
+      })
+      .join('\n');
+
+    styleEl.textContent = css;
+  }, [terminalCustomFonts]);
+
+  const addTerminalCustomFont = useCallback((font: Omit<TerminalCustomFontAsset, 'createdAt'> & { createdAt?: number }) => {
+    const normalized: TerminalCustomFontAsset = {
+      id: font.id,
+      name: font.name,
+      mime: font.mime,
+      dataBase64: font.dataBase64,
+      createdAt: font.createdAt ?? Date.now(),
+    };
+    setTerminalCustomFonts((prev) => {
+      const next = prev.filter((f) => f.id !== normalized.id);
+      next.push(normalized);
+      return next;
+    });
+  }, []);
+
+  const removeTerminalCustomFont = useCallback((id: string) => {
+    setTerminalCustomFonts((prev) => prev.filter((f) => f.id !== id));
+  }, []);
 
   useEffect(() => {
     localStorageAdapter.write(STORAGE_KEY_TERM_SETTINGS, terminalSettings);
@@ -518,6 +595,10 @@ export const useSettingsState = () => {
     currentTerminalFont,
     terminalFontSize,
     setTerminalFontSize,
+    terminalCustomFonts,
+    setTerminalCustomFonts,
+    addTerminalCustomFont,
+    removeTerminalCustomFont,
     terminalSettings,
     setTerminalSettings,
     updateTerminalSetting,

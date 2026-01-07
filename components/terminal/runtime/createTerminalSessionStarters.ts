@@ -26,10 +26,9 @@ type TerminalBackendApi = {
   startSerialSession: (
     options: Parameters<NonNullable<NetcattyBridge["startSerialSession"]>>[0],
   ) => Promise<string>;
-  execCommand: (options: Parameters<NetcattyBridge["execCommand"]>[0]) => Promise<{
-    stdout?: string;
-    stderr?: string;
-  }>;
+  execCommand: (
+    options: Parameters<NetcattyBridge["execCommand"]>[0],
+  ) => Promise<Awaited<ReturnType<NetcattyBridge["execCommand"]>>>;
   onSessionData: (sessionId: string, cb: (data: string) => void) => () => void;
   onSessionExit: (
     sessionId: string,
@@ -96,6 +95,7 @@ export type TerminalSessionStartersContext = {
     hostLabel: string,
     sessionId: string,
   ) => void;
+  onSessionChunkWritten?: () => void;
 };
 
 const buildTermEnv = (host: Host, terminalSettings?: TerminalSettings) => {
@@ -133,25 +133,29 @@ const attachSessionToTerminal = (
       // Replace \n that is not preceded by \r with \r\n
       data = data.replace(/(?<!\r)\n/g, "\r\n");
     }
-    term.write(ctx.highlightProcessorRef.current(data));
-    if (ctx.terminalSettings?.scrollOnOutput) {
-      term.scrollToBottom();
-    }
-    if (!ctx.hasConnectedRef.current) {
-      ctx.updateStatus("connected");
-      opts?.onConnected?.();
-      setTimeout(() => {
-        if (!ctx.fitAddonRef.current) return;
-        try {
-          ctx.fitAddonRef.current.fit();
-          if (ctx.sessionRef.current) {
-            ctx.terminalBackend.resizeSession(ctx.sessionRef.current, term.cols, term.rows);
+    const processed = ctx.highlightProcessorRef.current(data);
+    term.write(processed, () => {
+      ctx.onSessionChunkWritten?.();
+
+      if (ctx.terminalSettings?.scrollOnOutput) {
+        term.scrollToBottom();
+      }
+      if (!ctx.hasConnectedRef.current) {
+        ctx.updateStatus("connected");
+        opts?.onConnected?.();
+        setTimeout(() => {
+          if (!ctx.fitAddonRef.current) return;
+          try {
+            ctx.fitAddonRef.current.fit();
+            if (ctx.sessionRef.current) {
+              ctx.terminalBackend.resizeSession(ctx.sessionRef.current, term.cols, term.rows);
+            }
+          } catch (err) {
+            logger.warn("Post-connect fit failed", err);
           }
-        } catch (err) {
-          logger.warn("Post-connect fit failed", err);
-        }
-      }, 100);
-    }
+        }, 100);
+      }
+    });
   });
 
   ctx.disposeExitRef.current = ctx.terminalBackend.onSessionExit(id, (evt) => {
@@ -186,6 +190,7 @@ const runDistroDetection = async (
       command: "cat /etc/os-release 2>/dev/null || uname -a",
       timeout: 8000,
     });
+    if (!res.ok) throw new Error(res.error || res.stderr || "SSH exec failed");
     const data = `${res.stdout || ""}\n${res.stderr || ""}`;
     const idMatch = data.match(/ID=([\\w\\-]+)/i);
     const distro = idMatch
@@ -332,6 +337,7 @@ export const createTerminalSessionStarters = (ctx: TerminalSessionStartersContex
           hostname: ctx.host.hostname,
           username: effectiveUsername,
           port: ctx.host.port || 22,
+          portKnockingPorts: ctx.host.portKnockingPorts,
           password: attempt.password,
           privateKey: attempt.key?.privateKey,
           certificate: attempt.key?.certificate,

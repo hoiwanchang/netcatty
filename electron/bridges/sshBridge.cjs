@@ -611,35 +611,50 @@ async function startSSHSession(event, options) {
  * Execute a one-off command via SSH
  */
 async function execCommand(event, payload) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const conn = new SSHClient();
     let stdout = "";
     let stderr = "";
     let settled = false;
+    let ready = false;
     const timeoutMs = payload.timeout || 10000;
     let chainConnections = [];
     let connectionSocket = null;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
+
+    const cleanup = () => {
       try { conn.end(); } catch {}
-      if (connectionSocket && typeof connectionSocket.destroy === 'function') {
+      if (connectionSocket && typeof connectionSocket.destroy === "function") {
         try { connectionSocket.destroy(); } catch {}
       }
       for (const c of chainConnections) {
         try { c.end(); } catch {}
       }
-      reject(new Error("SSH exec timeout"));
+    };
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => {
+      finish({ ok: false, stdout, stderr, code: null, error: "SSH exec timeout" });
     }, timeoutMs);
 
     conn
       .on("ready", () => {
+        ready = true;
         conn.exec(payload.command, (err, stream) => {
           if (err) {
-            clearTimeout(timer);
-            settled = true;
-            conn.end();
-            return reject(err);
+            return finish({
+              ok: false,
+              stdout,
+              stderr,
+              code: null,
+              error: err?.message || "SSH exec failed",
+            });
           }
           stream
             .on("data", (data) => {
@@ -649,52 +664,37 @@ async function execCommand(event, payload) {
               stderr += data.toString();
             })
             .on("close", (code) => {
-              if (settled) return;
-              clearTimeout(timer);
-              settled = true;
-              try { conn.end(); } catch {}
-              if (connectionSocket && typeof connectionSocket.destroy === 'function') {
-                try { connectionSocket.destroy(); } catch {}
-              }
-              for (const c of chainConnections) {
-                try { c.end(); } catch {}
-              }
-              resolve({ stdout, stderr, code: code ?? (stderr ? 1 : 0) });
+              finish({
+                ok: true,
+                stdout,
+                stderr,
+                code: code ?? (stderr ? 1 : 0),
+              });
             });
         });
       })
       .on("error", (err) => {
-        if (settled) return;
-        clearTimeout(timer);
-        settled = true;
-        if (connectionSocket && typeof connectionSocket.destroy === 'function') {
-          try { connectionSocket.destroy(); } catch {}
-        }
-        for (const c of chainConnections) {
-          try { c.end(); } catch {}
-        }
-        reject(err);
+        finish({
+          ok: false,
+          stdout,
+          stderr,
+          code: null,
+          error:
+            err?.message ||
+            (ready ? "SSH connection error" : "SSH connection lost before handshake"),
+        });
       })
       .on("end", () => {
-        if (settled) return;
-        clearTimeout(timer);
-        settled = true;
         if (stderr || stdout) {
-          if (connectionSocket && typeof connectionSocket.destroy === 'function') {
-            try { connectionSocket.destroy(); } catch {}
-          }
-          for (const c of chainConnections) {
-            try { c.end(); } catch {}
-          }
-          resolve({ stdout, stderr, code: 0 });
+          finish({ ok: true, stdout, stderr, code: 0 });
         } else {
-          if (connectionSocket && typeof connectionSocket.destroy === 'function') {
-            try { connectionSocket.destroy(); } catch {}
-          }
-          for (const c of chainConnections) {
-            try { c.end(); } catch {}
-          }
-          reject(new Error("SSH connection closed unexpectedly"));
+          finish({
+            ok: false,
+            stdout,
+            stderr,
+            code: null,
+            error: "SSH connection closed unexpectedly",
+          });
         }
       });
 
@@ -738,17 +738,13 @@ async function execCommand(event, payload) {
           delete connectOpts.port;
         }
       } catch (err) {
-        if (settled) return;
-        clearTimeout(timer);
-        settled = true;
-        try { conn.end(); } catch {}
-        if (connectionSocket && typeof connectionSocket.destroy === 'function') {
-          try { connectionSocket.destroy(); } catch {}
-        }
-        for (const c of chainConnections) {
-          try { c.end(); } catch {}
-        }
-        reject(err);
+        finish({
+          ok: false,
+          stdout,
+          stderr,
+          code: null,
+          error: err instanceof Error ? err.message : String(err),
+        });
         return;
       }
 

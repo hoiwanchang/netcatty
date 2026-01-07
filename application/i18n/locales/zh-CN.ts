@@ -93,6 +93,19 @@ const zhCN: Messages = {
   'settings.plugins.serverStatus.name': '服务器状态',
   'settings.plugins.serverStatus.desc': '在活动 SSH 标签展示 CPU/MEM/DISK',
 
+  'settings.plugins.portKnocking.name': '端口敲门（Port Knocking）',
+  'settings.plugins.portKnocking.desc': '在建立 SSH 连接前执行端口敲门序列以打开端口',
+  'settings.plugins.portKnocking.section': '端口敲门',
+  'settings.plugins.portKnocking.ports': '敲门端口序列',
+  'settings.plugins.portKnocking.ports.desc': '用逗号分隔端口（例如：7000,8000,9000）',
+  'settings.plugins.portKnocking.ports.placeholder': '7000,8000,9000',
+  'settings.plugins.portKnocking.timeoutMs': '敲门超时（毫秒）',
+  'settings.plugins.portKnocking.timeoutMs.desc': '每个端口 TCP connect 的超时时间',
+  'settings.plugins.portKnocking.delayMs': '端口间隔（毫秒）',
+  'settings.plugins.portKnocking.delayMs.desc': '每次敲门之间等待时间',
+  'settings.plugins.portKnocking.waitAfterMs': '敲门后等待（毫秒）',
+  'settings.plugins.portKnocking.waitAfterMs.desc': '敲门完成后再等待一段时间再开始 SSH 连接',
+
   // Update notifications
   'update.available.title': '发现新版本',
   'update.available.message': '新版本 {version} 已发布，点击前往下载。',
@@ -120,6 +133,10 @@ const zhCN: Messages = {
   'settings.appearance.zebraBlocks': '斑马纹代码块',
   'settings.appearance.zebraBlocks.enable': '启用斑马纹代码块',
   'settings.appearance.zebraBlocks.enable.desc': '为终端的代码块使用循环的背景色条纹',
+  'settings.appearance.zebraBlocks.showBackground': '显示背景色',
+  'settings.appearance.zebraBlocks.showBackground.desc': '为每条命令的输出块应用交替背景色',
+  'settings.appearance.zebraBlocks.showFrame': '显示边框',
+  'settings.appearance.zebraBlocks.showFrame.desc': '为每条命令的输出块叠加圆角边框（不影响输出内容）',
   'settings.appearance.zebraBlocks.background': '背景色',
   'settings.appearance.zebraBlocks.add': '添加背景色',
 
@@ -144,6 +161,16 @@ const zhCN: Messages = {
     '/* 示例：*/\n.terminal { background: #1a1a2e !important; }\n:root { --radius: 0.25rem; }',
   'settings.appearance.language': '语言',
   'settings.appearance.language.desc': '选择界面语言',
+
+  'settings.appearance.terminalFont': '终端字体',
+  'settings.appearance.terminalFont.family': '字体',
+  'settings.appearance.terminalFont.family.desc': '全局终端字体（主机可覆盖）',
+  'settings.appearance.terminalFont.size': '字体大小',
+  'settings.appearance.terminalFont.size.desc': '全局终端字号（主机可覆盖）',
+  'settings.appearance.terminalFont.customFiles': '自定义字体文件',
+  'settings.appearance.terminalFont.customFiles.desc': '已导入字体会随云同步备份',
+  'settings.appearance.terminalFont.import': '导入字体',
+  'settings.appearance.terminalFont.custom': '自定义',
 
   // Context menus / common actions
   'action.newHost': '新建主机',
@@ -404,6 +431,9 @@ const zhCN: Messages = {
   'hostDetails.group.placeholder': '父级 Group',
   'hostDetails.section.credentials': '凭据',
   'hostDetails.section.portCredentials': '端口与凭据',
+  'hostDetails.portKnocking.title': '端口敲门（Port Knocking）',
+  'hostDetails.portKnocking.ports.placeholder': '例如：7000,8000,9000',
+  'hostDetails.portKnocking.ports.hint': '当此处不为空时，SSH 连接前会按序敲这些端口（需启用 Port Knocking 插件）。',
   'hostDetails.section.appearance': '外观',
   'hostDetails.section.mosh': 'Mosh',
   'hostDetails.username.placeholder': '用户名',

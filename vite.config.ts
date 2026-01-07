@@ -8,6 +8,7 @@ export default defineConfig(() => {
       base: "./",
       server: {
         port: 5173,
+        strictPort: true,
         host: 'localhost',
         headers: {
           // Required for SharedArrayBuffer and WASM in some browsers

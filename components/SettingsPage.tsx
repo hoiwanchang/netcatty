@@ -28,11 +28,22 @@ const SettingsSyncTabWithVault: React.FC = () => {
         keys,
         identities,
         snippets,
+        customGroups,
+        knownHosts,
         importDataFromString,
         clearVaultData,
     } = useVaultState();
 
-    const { terminalSettings, updateTerminalSetting } = useSettingsState();
+    const {
+        terminalSettings,
+        updateTerminalSetting,
+        terminalFontFamilyId,
+        setTerminalFontFamilyId,
+        terminalFontSize,
+        setTerminalFontSize,
+        terminalCustomFonts,
+        setTerminalCustomFonts,
+    } = useSettingsState();
 
     return (
         <SettingsSyncTab
@@ -40,10 +51,18 @@ const SettingsSyncTabWithVault: React.FC = () => {
             keys={keys}
             identities={identities}
             snippets={snippets}
+            customGroups={customGroups}
+            knownHosts={knownHosts}
             importDataFromString={importDataFromString}
             clearVaultData={clearVaultData}
             terminalSettings={terminalSettings}
             updateTerminalSetting={updateTerminalSetting}
+            terminalFontFamilyId={terminalFontFamilyId}
+            setTerminalFontFamilyId={setTerminalFontFamilyId}
+            terminalFontSize={terminalFontSize}
+            setTerminalFontSize={setTerminalFontSize}
+            terminalCustomFonts={terminalCustomFonts}
+            setTerminalCustomFonts={setTerminalCustomFonts}
         />
     );
 };
@@ -160,6 +179,13 @@ const SettingsPageContent: React.FC<{ settings: SettingsState }> = ({ settings }
                             terminalThemeId={settings.terminalThemeId}
                             terminalSettings={settings.terminalSettings}
                             updateTerminalSetting={settings.updateTerminalSetting}
+                            terminalFontFamilyId={settings.terminalFontFamilyId}
+                            setTerminalFontFamilyId={settings.setTerminalFontFamilyId}
+                            terminalFontSize={settings.terminalFontSize}
+                            setTerminalFontSize={settings.setTerminalFontSize}
+                            terminalCustomFonts={settings.terminalCustomFonts}
+                            addTerminalCustomFont={settings.addTerminalCustomFont}
+                            removeTerminalCustomFont={settings.removeTerminalCustomFont}
                         />
                     )}
 

@@ -40,6 +40,13 @@ const DEFAULT_PLUGIN_MANIFESTS = [
 		description: "Shows CPU/memory/disk status in terminal.",
 		homepage: "",
 	},
+	{
+		id: "portKnocking",
+		name: "Port Knocking",
+		version: "1.0.0",
+		description: "Run a port knocking sequence before starting an SSH connection.",
+		homepage: "",
+	},
 ];
 
 function init(deps) {

@@ -1115,7 +1115,7 @@ echo $3 >> "$FILE"`);
 
                       // Check result - code 0, null, or undefined with no stderr is success
                       const exitCode = result?.code;
-                      const hasError = result?.stderr?.trim();
+                      const hasError = (result?.stderr || result?.error || "").trim();
                       if (exitCode === 0 || (exitCode == null && !hasError)) {
                         // Update identity (preferred) or host to use this key for authentication
                         if (exportHost.identityId && onSaveIdentity) {

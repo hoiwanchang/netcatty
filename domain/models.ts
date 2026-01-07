@@ -88,6 +88,9 @@ export interface Host {
   telnetEnabled?: boolean; // Is Telnet enabled for this host
   telnetUsername?: string; // Telnet-specific username
   telnetPassword?: string; // Telnet-specific password
+
+  // Port knocking (per-host)
+  portKnockingPorts?: number[]; // Port sequence for port knocking (e.g., [7000, 8000, 9000])
 }
 
 export type KeyType = 'RSA' | 'ECDSA' | 'ED25519';
@@ -346,6 +349,7 @@ export interface LLMConfig {
   endpoint?: string; // For custom providers
   autoSuggestOnError: boolean; // Auto-suggest fixes for command errors
   zebraStripingEnabled: boolean; // Enable alternating background colors for commands
+  zebraFrameEnabled: boolean; // Enable UI overlay frame for command blocks
   zebraStripeColors?: string[]; // Optional list of hex colors used cyclically for zebra blocks
 }
 
@@ -365,6 +369,14 @@ export interface CommandCandidatesSettings {
   enabled: boolean;
   // How long to keep the cached commands list before refreshing.
   cacheTtlMs: number;
+}
+
+export interface TerminalCustomFontAsset {
+  id: string;
+  name: string;
+  mime: string;
+  dataBase64: string;
+  createdAt: number;
 }
 
 export interface TerminalSettings {
@@ -435,6 +447,7 @@ export const DEFAULT_LLM_CONFIG: LLMConfig = {
   model: 'gemini-2.5-flash',
   autoSuggestOnError: true,
   zebraStripingEnabled: true,
+  zebraFrameEnabled: true,
 };
 
 export const DEFAULT_SERVER_STATUS_SETTINGS: ServerStatusSettings = {

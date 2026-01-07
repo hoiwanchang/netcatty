@@ -17,6 +17,9 @@ import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
 import { toast } from "../../ui/toast";
 import { SectionHeader, SettingRow, SettingsTabContent, Toggle } from "../settings-ui";
+import {
+  normalizePortKnockingSettings,
+} from "../../../domain/portKnocking";
 
 const ACCENT_COLORS = [
   { name: "Sky", value: "199 89% 48%" },
@@ -42,7 +45,13 @@ const ACCENT_COLORS = [
 const getHslStyle = (hsl: string) => ({ backgroundColor: `hsl(${hsl})` });
 
 function isBuiltinPluginId(id: string) {
-  return id === "ai" || id === "zebra" || id === "commandCandidates" || id === "serverStatus";
+  return (
+    id === "ai" ||
+    id === "zebra" ||
+    id === "commandCandidates" ||
+    id === "serverStatus" ||
+    id === "portKnocking"
+  );
 }
 
 function getPluginDisplay(t: (k: string) => string, p: { id: string; name: string; description?: string }) {
@@ -53,6 +62,9 @@ function getPluginDisplay(t: (k: string) => string, p: { id: string; name: strin
   }
   if (p.id === "serverStatus") {
     return { title: t("settings.plugins.serverStatus.name"), desc: t("settings.plugins.serverStatus.desc") };
+  }
+  if (p.id === "portKnocking") {
+    return { title: t("settings.plugins.portKnocking.name"), desc: t("settings.plugins.portKnocking.desc") };
   }
   return { title: p.name, desc: p.description ?? "" };
 }
@@ -100,6 +112,7 @@ export default function SettingsPluginsTab(props: {
       endpoint: existing?.endpoint,
       autoSuggestOnError: existing?.autoSuggestOnError ?? DEFAULT_LLM_CONFIG.autoSuggestOnError,
       zebraStripingEnabled: existing?.zebraStripingEnabled ?? DEFAULT_LLM_CONFIG.zebraStripingEnabled,
+      zebraFrameEnabled: existing?.zebraFrameEnabled ?? DEFAULT_LLM_CONFIG.zebraFrameEnabled,
       zebraStripeColors: existing?.zebraStripeColors,
     };
   }, [terminalSettings.llmConfig]);
@@ -148,6 +161,18 @@ export default function SettingsPluginsTab(props: {
     if (list.length >= 2) return list.map((c) => (c.startsWith("#") ? c : `#${c}`));
     return [computeDefaultZebraColor(0), computeDefaultZebraColor(1)];
   }, [computeDefaultZebraColor, ensureLlmConfig]);
+
+  const portKnockingCfg = useMemo(
+    () => normalizePortKnockingSettings(plugins.getPluginSettings("portKnocking")),
+    [plugins],
+  );
+
+  const updatePortKnocking = useCallback(
+    (next: Partial<typeof portKnockingCfg>) => {
+      plugins.setPluginSettings("portKnocking", { ...portKnockingCfg, ...next });
+    },
+    [plugins, portKnockingCfg],
+  );
 
   const llmCfg = useMemo(() => ensureLlmConfig(), [ensureLlmConfig]);
 
@@ -426,6 +451,38 @@ export default function SettingsPluginsTab(props: {
                     <>
                       <SectionHeader title={t("settings.appearance.zebraBlocks")} />
                       <div className="space-y-0 divide-y divide-border rounded-lg border bg-card px-4">
+                        <SettingRow
+                          label={t("settings.appearance.zebraBlocks.showBackground")}
+                          description={t("settings.appearance.zebraBlocks.showBackground.desc")}
+                        >
+                          <Toggle
+                            checked={llmCfg.zebraStripingEnabled}
+                            disabled={!enabled}
+                            onChange={(zebraStripingEnabled) =>
+                              updateTerminalSetting("llmConfig", {
+                                ...llmCfg,
+                                zebraStripingEnabled,
+                              })
+                            }
+                          />
+                        </SettingRow>
+
+                        <SettingRow
+                          label={t("settings.appearance.zebraBlocks.showFrame")}
+                          description={t("settings.appearance.zebraBlocks.showFrame.desc")}
+                        >
+                          <Toggle
+                            checked={llmCfg.zebraFrameEnabled}
+                            disabled={!enabled}
+                            onChange={(zebraFrameEnabled) =>
+                              updateTerminalSetting("llmConfig", {
+                                ...llmCfg,
+                                zebraFrameEnabled,
+                              })
+                            }
+                          />
+                        </SettingRow>
+
                         {zebraColors.map((color, idx) => (
                           <SettingRow
                             key={`${idx}-${color}`}
@@ -602,6 +659,70 @@ export default function SettingsPluginsTab(props: {
                               if (!Number.isFinite(hours)) return;
                               const clamped = Math.max(1, Math.min(168, Math.round(hours)));
                               updateCommandCandidates({ cacheTtlMs: clamped * 60 * 60 * 1000 });
+                            }}
+                            className="h-9 w-24 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          />
+                        </SettingRow>
+                      </div>
+                    </>
+                  )}
+
+                  {p.id === "portKnocking" && (
+                    <>
+                      <SectionHeader title={t("settings.plugins.portKnocking.section")} />
+                      <div className="space-y-0 divide-y divide-border rounded-lg border bg-card px-4">
+                        <SettingRow
+                          label={t("settings.plugins.portKnocking.timeoutMs")}
+                          description={t("settings.plugins.portKnocking.timeoutMs.desc")}
+                        >
+                          <input
+                            type="number"
+                            min={100}
+                            max={10000}
+                            value={portKnockingCfg.timeoutMs}
+                            disabled={!enabled}
+                            onChange={(e) => {
+                              const n = Number(e.target.value);
+                              if (!Number.isFinite(n)) return;
+                              updatePortKnocking({ timeoutMs: Math.max(100, Math.min(10000, Math.round(n))) });
+                            }}
+                            className="h-9 w-24 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          />
+                        </SettingRow>
+
+                        <SettingRow
+                          label={t("settings.plugins.portKnocking.delayMs")}
+                          description={t("settings.plugins.portKnocking.delayMs.desc")}
+                        >
+                          <input
+                            type="number"
+                            min={0}
+                            max={10000}
+                            value={portKnockingCfg.delayMs}
+                            disabled={!enabled}
+                            onChange={(e) => {
+                              const n = Number(e.target.value);
+                              if (!Number.isFinite(n)) return;
+                              updatePortKnocking({ delayMs: Math.max(0, Math.min(10000, Math.round(n))) });
+                            }}
+                            className="h-9 w-24 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          />
+                        </SettingRow>
+
+                        <SettingRow
+                          label={t("settings.plugins.portKnocking.waitAfterMs")}
+                          description={t("settings.plugins.portKnocking.waitAfterMs.desc")}
+                        >
+                          <input
+                            type="number"
+                            min={0}
+                            max={30000}
+                            value={portKnockingCfg.waitAfterMs}
+                            disabled={!enabled}
+                            onChange={(e) => {
+                              const n = Number(e.target.value);
+                              if (!Number.isFinite(n)) return;
+                              updatePortKnocking({ waitAfterMs: Math.max(0, Math.min(30000, Math.round(n))) });
                             }}
                             className="h-9 w-24 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                           />

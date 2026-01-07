@@ -250,6 +250,8 @@ export const useActiveSessionServerStatus = (args: {
           timeout: 12_000,
         });
 
+        if (!res.ok) throw new Error(res.error || res.stderr || "SSH exec failed");
+
         const combined = `${res.stdout || ""}\n${res.stderr || ""}`;
         const parsed = parseServerStatusOutput(combined);
         const snapshot: ServerStatusSnapshot = {

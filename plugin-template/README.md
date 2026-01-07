@@ -21,7 +21,7 @@ Required fields:
 - `id`: string
   - lower-case letters/numbers and `-` or `_`
   - length 2–64
-  - must not conflict with built-in ids: `ai`, `zebra`, `commandCandidates`, `serverStatus`
+  - must not conflict with built-in ids: `ai`, `zebra`, `commandCandidates`, `serverStatus`, `portKnocking`
 - `name`: string
 - `version`: string
 

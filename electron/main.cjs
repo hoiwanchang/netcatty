@@ -72,6 +72,7 @@ const transferBridge = require("./bridges/transferBridge.cjs");
 const portForwardingBridge = require("./bridges/portForwardingBridge.cjs");
 const terminalBridge = require("./bridges/terminalBridge.cjs");
 const pluginsBridge = require("./bridges/pluginsBridge.cjs");
+const portKnockingBridge = require("./bridges/portKnockingBridge.cjs");
 const oauthBridge = require("./bridges/oauthBridge.cjs");
 const githubAuthBridge = require("./bridges/githubAuthBridge.cjs");
 const googleAuthBridge = require("./bridges/googleAuthBridge.cjs");
@@ -370,6 +371,7 @@ const registerBridges = (win) => {
   transferBridge.init(deps);
   terminalBridge.init(deps);
   pluginsBridge.init(deps);
+  portKnockingBridge.init(deps);
 
   // Register all IPC handlers
   sshBridge.registerHandlers(ipcMain);
@@ -379,6 +381,7 @@ const registerBridges = (win) => {
   portForwardingBridge.registerHandlers(ipcMain);
   terminalBridge.registerHandlers(ipcMain);
   pluginsBridge.registerHandlers(ipcMain);
+  portKnockingBridge.registerHandlers(ipcMain);
   oauthBridge.setupOAuthBridge(ipcMain);
   githubAuthBridge.registerHandlers(ipcMain);
   googleAuthBridge.registerHandlers(ipcMain, electronModule);
@@ -582,9 +585,14 @@ app.whenReady().then(() => {
 
 // Ensure single-instance behavior focuses existing window
 try {
+  const isDev = Boolean(process.env.VITE_DEV_SERVER_URL) || process.env.NODE_ENV === "development";
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
-    app.quit();
+    if (!isDev) {
+      app.quit();
+    } else {
+      console.warn("[Main] Single-instance lock not acquired (dev mode): continuing anyway");
+    }
   } else {
     app.on("second-instance", () => {
       focusMainWindow();

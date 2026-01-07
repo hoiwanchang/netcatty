@@ -107,6 +107,19 @@ const en: Messages = {
   'settings.plugins.serverStatus.name': 'Server Status',
   'settings.plugins.serverStatus.desc': 'Show CPU/MEM/DISK for the active SSH tab',
 
+  'settings.plugins.portKnocking.name': 'Port Knocking',
+  'settings.plugins.portKnocking.desc': 'Run a port knocking sequence before starting an SSH connection',
+  'settings.plugins.portKnocking.section': 'Port Knocking',
+  'settings.plugins.portKnocking.ports': 'Port sequence',
+  'settings.plugins.portKnocking.ports.desc': 'Comma-separated ports to knock (e.g. 7000,8000,9000)',
+  'settings.plugins.portKnocking.ports.placeholder': '7000,8000,9000',
+  'settings.plugins.portKnocking.timeoutMs': 'Knock timeout (ms)',
+  'settings.plugins.portKnocking.timeoutMs.desc': 'Per-port TCP connect timeout',
+  'settings.plugins.portKnocking.delayMs': 'Delay between knocks (ms)',
+  'settings.plugins.portKnocking.delayMs.desc': 'Wait time between each port',
+  'settings.plugins.portKnocking.waitAfterMs': 'Wait after knocks (ms)',
+  'settings.plugins.portKnocking.waitAfterMs.desc': 'Extra wait before starting SSH connect',
+
   // Update notifications
   'update.available.title': 'Update Available',
   'update.available.message': 'A new version {version} is available. Click to download.',
@@ -134,6 +147,10 @@ const en: Messages = {
   'settings.appearance.zebraBlocks': 'Zebra Blocks',
   'settings.appearance.zebraBlocks.enable': 'Enable zebra blocks',
   'settings.appearance.zebraBlocks.enable.desc': 'Use alternating background colors for terminal blocks',
+  'settings.appearance.zebraBlocks.showBackground': 'Show background',
+  'settings.appearance.zebraBlocks.showBackground.desc': 'Apply alternating background colors to each command block',
+  'settings.appearance.zebraBlocks.showFrame': 'Show frame',
+  'settings.appearance.zebraBlocks.showFrame.desc': 'Overlay a rounded frame around each command block (does not affect output)',
   'settings.appearance.zebraBlocks.background': 'Background',
   'settings.appearance.zebraBlocks.add': 'Add background color',
 
@@ -159,6 +176,16 @@ const en: Messages = {
     '/* Example: */\n.terminal { background: #1a1a2e !important; }\n:root { --radius: 0.25rem; }',
   'settings.appearance.language': 'Language',
   'settings.appearance.language.desc': 'Choose the UI language',
+
+  'settings.appearance.terminalFont': 'Terminal Font',
+  'settings.appearance.terminalFont.family': 'Font',
+  'settings.appearance.terminalFont.family.desc': 'Global terminal font (hosts can override)',
+  'settings.appearance.terminalFont.size': 'Font size',
+  'settings.appearance.terminalFont.size.desc': 'Global terminal font size (hosts can override)',
+  'settings.appearance.terminalFont.customFiles': 'Custom font files',
+  'settings.appearance.terminalFont.customFiles.desc': 'Imported fonts are included in cloud sync backups',
+  'settings.appearance.terminalFont.import': 'Import font',
+  'settings.appearance.terminalFont.custom': 'custom',
 
   // Settings > Terminal
   'settings.terminal.section.theme': 'Terminal Theme',
@@ -563,6 +590,9 @@ const en: Messages = {
   'hostDetails.group.placeholder': 'Parent Group',
   'hostDetails.section.credentials': 'Credentials',
   'hostDetails.section.portCredentials': 'Port & Credentials',
+  'hostDetails.portKnocking.title': 'Port Knocking',
+  'hostDetails.portKnocking.ports.placeholder': 'e.g. 7000,8000,9000',
+  'hostDetails.portKnocking.ports.hint': 'If non-empty, Netcatty will knock these ports before SSH connects (requires the Port Knocking plugin to be enabled).',
   'hostDetails.section.appearance': 'Appearance',
   'hostDetails.section.mosh': 'Mosh',
   'hostDetails.username.placeholder': 'Username',

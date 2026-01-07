@@ -1,4 +1,4 @@
-import { Terminal as XTerm } from "@xterm/xterm";
+import { Terminal as XTerm, type IDecoration, type IMarker } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { SearchAddon } from "@xterm/addon-search";
@@ -93,6 +93,7 @@ interface TerminalProps {
   isFocused?: boolean;
   fontFamilyId: string;
   fontSize: number;
+  customFontFamilies?: Record<string, string>;
   terminalTheme: TerminalTheme;
   terminalSettings?: TerminalSettings;
   sessionId: string;
@@ -141,6 +142,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   isFocused,
   fontFamilyId,
   fontSize,
+  customFontFamilies,
   terminalTheme,
   terminalSettings,
   sessionId,
@@ -287,12 +289,304 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   const commandBlockZebraIndexRef = useRef(0);
   const commandBlockBgSeqRef = useRef<string>("");
 
+  const promptDetectionCarryRef = useRef<string>("");
+  const pendingFinalizeBeforePromptRef = useRef(false);
+
+  const commandFramesRef = useRef<
+    Map<
+      number,
+      {
+        marker: IMarker;
+        decoration: IDecoration;
+        height: number;
+      }
+    >
+  >(new Map());
+  const frameCleanupAttachedRef = useRef<Set<number>>(new Set());
+  const activeCommandFrameRef = useRef<{
+    marker: IMarker;
+    decoration: IDecoration;
+    startLine: number;
+    height: number;
+    endLine?: number;
+    finalized?: boolean;
+    continuation?: {
+      marker: IMarker;
+      decoration: IDecoration;
+      startLine: number;
+      height: number;
+    };
+  } | null>(null);
+  const frameUpdateRafRef = useRef<number | null>(null);
+
+  const disposeCommandFrame = useCallback((markerId: number) => {
+    const entry = commandFramesRef.current.get(markerId);
+    if (!entry) return;
+    try {
+      entry.decoration.dispose();
+    } finally {
+      commandFramesRef.current.delete(markerId);
+    }
+  }, []);
+
+  const createCommandFrame = useCallback(
+    (term: XTerm, marker: IMarker, height: number): IDecoration | null => {
+      try {
+        const decoration = term.registerDecoration({
+          marker,
+          x: 0,
+          width: Math.max(1, term.cols),
+          height: Math.max(1, height),
+          layer: "top",
+        });
+        if (!decoration) return null;
+
+        decoration.onRender((element) => {
+          element.classList.add("nc-command-frame");
+        });
+
+        return decoration;
+      } catch {
+        // Proposed API might be disabled; fail silently.
+        return null;
+      }
+    },
+    [],
+  );
+
+  const recreateFrame = useCallback(
+    (term: XTerm, marker: IMarker, height: number) => {
+      const existing = commandFramesRef.current.get(marker.id);
+      if (existing) {
+        existing.decoration.dispose();
+        commandFramesRef.current.delete(marker.id);
+      }
+      const decoration = createCommandFrame(term, marker, height);
+      if (!decoration) return null;
+      const entry = { marker, decoration, height };
+      commandFramesRef.current.set(marker.id, entry);
+
+      // Clean up when the marker is trimmed from the buffer.
+      if (!frameCleanupAttachedRef.current.has(marker.id)) {
+        frameCleanupAttachedRef.current.add(marker.id);
+        marker.onDispose(() => {
+          frameCleanupAttachedRef.current.delete(marker.id);
+          disposeCommandFrame(marker.id);
+        });
+      }
+
+      // Keep memory bounded.
+      const maxFrames = 60;
+      if (commandFramesRef.current.size > maxFrames) {
+        const oldestId = commandFramesRef.current.keys().next().value as number | undefined;
+        if (typeof oldestId === "number") {
+          disposeCommandFrame(oldestId);
+        }
+      }
+
+      return entry;
+    },
+    [createCommandFrame, disposeCommandFrame],
+  );
+
+  const scheduleActiveFrameUpdate = useCallback(
+    (opts?: { closeBeforePrompt?: boolean; finalize?: boolean }) => {
+      if (frameUpdateRafRef.current != null) return;
+      frameUpdateRafRef.current = window.requestAnimationFrame(() => {
+        frameUpdateRafRef.current = null;
+        const term = termRef.current;
+        const active = activeCommandFrameRef.current;
+        if (!term || !active || active.marker.isDisposed) return;
+
+        const cursorAbsLine = term.buffer.active.baseY + term.buffer.active.cursorY;
+        const inferredEndLine = opts?.closeBeforePrompt
+          ? Math.max(active.startLine, cursorAbsLine - 1)
+          : Math.max(active.startLine, cursorAbsLine);
+
+        const targetEndLine = active.finalized
+          ? Math.max(active.startLine, active.endLine ?? active.startLine)
+          : inferredEndLine;
+
+        const nextHeight = Math.max(1, targetEndLine - active.startLine + 1);
+
+        // Update the main (full-block) frame height while the command is live.
+        if (!active.finalized && nextHeight !== active.height) {
+          const recreated = recreateFrame(term, active.marker, nextHeight);
+          if (recreated) {
+            activeCommandFrameRef.current = {
+              ...active,
+              marker: recreated.marker,
+              decoration: recreated.decoration,
+              height: nextHeight,
+              endLine: targetEndLine,
+            };
+          }
+        } else if (!active.finalized) {
+          active.endLine = targetEndLine;
+        }
+
+        // When the start line scrolls out of view, xterm decorations may stop rendering.
+        // Add a lightweight "continuation" frame anchored to the current viewport top,
+        // so the border remains visible for long outputs.
+        const viewportStart = term.buffer.active.baseY;
+        const viewportEnd = viewportStart + Math.max(0, term.rows - 1);
+        const blockStart = active.startLine;
+        const blockEnd = targetEndLine;
+        const intersectsViewport = blockEnd >= viewportStart && blockStart <= viewportEnd;
+        const needsContinuation = intersectsViewport && blockStart < viewportStart;
+
+        if (needsContinuation) {
+          const desiredStart = viewportStart;
+          const desiredHeight = Math.max(1, Math.min(term.rows, blockEnd - desiredStart + 1));
+          const existing = active.continuation;
+          const needsNewMarker = !existing || existing.marker.isDisposed || existing.startLine !== desiredStart;
+          const needsResize = !existing || existing.height !== desiredHeight;
+
+          if (needsNewMarker) {
+            // Marker at the viewport top (baseY): cursorAbsLine - cursorY === baseY.
+            const yOffsetToViewportTop = -term.buffer.active.cursorY;
+            let marker: IMarker | null = null;
+            try {
+              marker = term.registerMarker(yOffsetToViewportTop);
+            } catch {
+              marker = null;
+            }
+            if (marker) {
+              const created = recreateFrame(term, marker, desiredHeight);
+              if (created) {
+                // Dispose the previous continuation marker/decoration if any.
+                try {
+                  existing?.decoration.dispose();
+                } catch {
+                  // ignore
+                }
+                try {
+                  existing?.marker.dispose?.();
+                } catch {
+                  // ignore
+                }
+                active.continuation = {
+                  marker: created.marker,
+                  decoration: created.decoration,
+                  startLine: desiredStart,
+                  height: desiredHeight,
+                };
+              }
+            }
+          } else if (needsResize && existing) {
+            const recreated = recreateFrame(term, existing.marker, desiredHeight);
+            if (recreated) {
+              active.continuation = {
+                marker: recreated.marker,
+                decoration: recreated.decoration,
+                startLine: desiredStart,
+                height: desiredHeight,
+              };
+            }
+          }
+        } else if (active.continuation) {
+          // No longer needed; clean up.
+          try {
+            active.continuation.decoration.dispose();
+          } catch {
+            // ignore
+          }
+          try {
+            active.continuation.marker.dispose?.();
+          } catch {
+            // ignore
+          }
+          active.continuation = undefined;
+        }
+
+        if (opts?.finalize) {
+          // Keep the frame as the latest one so it can remain visible during scroll;
+          // but freeze its end line.
+          active.finalized = true;
+          active.endLine = targetEndLine;
+        }
+      });
+    },
+    [recreateFrame],
+  );
+
+  const getZebraFlags = useCallback(() => {
+    const cfg = terminalSettingsRef.current?.llmConfig;
+    const zebraEnabled = zebraPluginEnabled;
+    return {
+      zebraBgEnabled: Boolean(zebraEnabled && (cfg?.zebraStripingEnabled ?? true)),
+      zebraFrameEnabled: Boolean(zebraEnabled && (cfg?.zebraFrameEnabled ?? true)),
+    };
+  }, [zebraPluginEnabled]);
+
+  const detectPromptStartInChunk = useCallback((chunk: string): number | null => {
+    const stripAnsiForPrompt = (input: string): string => {
+      let out = "";
+      for (let i = 0; i < input.length; i++) {
+        const code = input.charCodeAt(i);
+        if (code === 0x1b || code === 0x9b) {
+          if (code === 0x1b && input[i + 1] === "[") {
+            i += 2;
+            while (i < input.length) {
+              const c = input.charCodeAt(i);
+              if (c >= 0x40 && c <= 0x7e) break;
+              i++;
+            }
+          }
+          continue;
+        }
+        out += input[i];
+      }
+      return out;
+    };
+
+    const looksLikePromptLine = (visibleLine: string): boolean => {
+      const v = visibleLine.replace(/\s+$/, " ");
+      if (v.length === 0 || v.length > 260) return false;
+      if (/^PS [^\r\n>]{0,240}> $/.test(v)) return true;
+      if (/^[A-Za-z]:\\[^\r\n>]{0,240}> $/.test(v)) return true;
+      if (/^[^\s\r\n]{1,64}@[\w.-]{1,128}:[^\r\n]{0,180}[$#] $/.test(v)) return true;
+      return false;
+    };
+
+    const findPromptLineStart = (input: string): number | null => {
+      let lineStart = 0;
+      for (let i = 0; i <= input.length; i++) {
+        const atEnd = i === input.length;
+        const ch = atEnd ? "" : input[i];
+        if (atEnd || ch === "\n" || ch === "\r") {
+          const lineEnd = i;
+          const rawLine = input.slice(lineStart, lineEnd);
+          const visible = stripAnsiForPrompt(rawLine);
+          if (looksLikePromptLine(visible)) return lineStart;
+
+          if (!atEnd) {
+            if (ch === "\r" && input[i + 1] === "\n") i += 1;
+            lineStart = i + 1;
+          }
+        }
+      }
+      return null;
+    };
+
+    const carry = promptDetectionCarryRef.current;
+    const combined = carry + chunk;
+    const promptStartCombined = findPromptLineStart(combined);
+
+    const carryLimit = 512;
+    promptDetectionCarryRef.current = combined.slice(Math.max(0, combined.length - carryLimit));
+
+    if (promptStartCombined == null) return null;
+    const promptStartInChunk = promptStartCombined - carry.length;
+    return promptStartInChunk <= 0 ? 0 : promptStartInChunk;
+  }, []);
+
   const writeAiBlock = useCallback(
     (term: XTerm, opts: { prompt: string; response?: string; error?: string }) => {
       const bgRgb = hexToRgb(effectiveTheme.colors.background) ?? { r: 0, g: 0, b: 0 };
       const fgRgb = hexToRgb(effectiveTheme.colors.foreground) ?? { r: 220, g: 220, b: 220 };
 
-      const zebraEnabled = zebraPluginEnabled;
+      const zebraEnabled = getZebraFlags().zebraBgEnabled;
       const zebraIndex = zebraEnabled ? aiBlockZebraIndexRef.current : 0;
 
       const customStripeColors = terminalSettingsRef.current?.llmConfig?.zebraStripeColors;
@@ -345,7 +639,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 
       term.writeln(bg(blockBg) + fg(fgRgb) + pad(bottom) + reset);
     },
-    [effectiveTheme.colors.background, effectiveTheme.colors.foreground, zebraPluginEnabled],
+    [effectiveTheme.colors.background, effectiveTheme.colors.foreground, getZebraFlags],
   );
 
   const lastUserCommandRef = useRef<string | null>(null);
@@ -431,75 +725,24 @@ const TerminalComponent: React.FC<TerminalProps> = ({
 
   const applyCommandBlockBgToChunk = useCallback((chunk: string) => {
     const bg = commandBlockBgSeqRef.current;
-    if (!bg) return chunk;
 
-    const stripAnsiForPrompt = (input: string): string => {
-      let out = "";
-      for (let i = 0; i < input.length; i++) {
-        const code = input.charCodeAt(i);
-        if (code === 0x1b || code === 0x9b) {
-          if (code === 0x1b && input[i + 1] === "[") {
-            i += 2;
-            while (i < input.length) {
-              const c = input.charCodeAt(i);
-              if (c >= 0x40 && c <= 0x7e) break;
-              i++;
-            }
-          }
-          continue;
-        }
-        out += input[i];
-      }
-      return out;
-    };
-
-    const looksLikePromptLine = (visibleLine: string): boolean => {
-      // Keep checks conservative to avoid false positives.
-      // Common bash/zsh: user@host:path$  / user@host:path#
-      // Common Windows: PS ...>  / C:\...>
-      const v = visibleLine.replace(/\s+$/, " ");
-      if (v.length === 0 || v.length > 260) return false;
-      if (/^PS [^\r\n>]{0,240}> $/.test(v)) return true;
-      if (/^[A-Za-z]:\\[^\r\n>]{0,240}> $/.test(v)) return true;
-      if (/^[^\s\r\n]{1,64}@[\w.-]{1,128}:[^\r\n]{0,180}[$#] $/.test(v)) return true;
-      return false;
-    };
-
-    const findPromptLineStart = (input: string): number | null => {
-      let lineStart = 0;
-      for (let i = 0; i <= input.length; i++) {
-        const atEnd = i === input.length;
-        const ch = atEnd ? "" : input[i];
-        if (atEnd || ch === "\n" || ch === "\r") {
-          const lineEnd = i;
-          const rawLine = input.slice(lineStart, lineEnd);
-          const visible = stripAnsiForPrompt(rawLine);
-          if (looksLikePromptLine(visible)) return lineStart;
-
-          if (!atEnd) {
-            if (ch === "\r" && input[i + 1] === "\n") i += 1;
-            lineStart = i + 1;
-          }
-        }
-      }
-      return null;
-    };
-
-    const promptStart = findPromptLineStart(chunk);
+    const promptStart = detectPromptStartInChunk(chunk);
     const chunkBeforePrompt = promptStart == null ? chunk : chunk.slice(0, promptStart);
     const chunkPromptAndAfter = promptStart == null ? "" : chunk.slice(promptStart);
 
     // Keep background stable even when output resets attributes.
     // Also fill the rest of each line so the stripe looks like a block.
     const stabilized =
-      bg +
-      chunkBeforePrompt
-        .split("\x1b[0m")
-        .join(`\x1b[0m${bg}`)
-        .split("\x1b[m")
-        .join(`\x1b[m${bg}`)
-        .split("\x1b[49m")
-        .join(`\x1b[49m${bg}`);
+      (bg ? bg : "") +
+      (bg
+        ? chunkBeforePrompt
+            .split("\x1b[0m")
+            .join(`\x1b[0m${bg}`)
+            .split("\x1b[m")
+            .join(`\x1b[m${bg}`)
+            .split("\x1b[49m")
+            .join(`\x1b[49m${bg}`)
+        : chunkBeforePrompt);
 
     // EL (Erase in Line) clears to end-of-line using current attributes.
     // Insert it before each line break and re-apply bg on the next line.
@@ -509,15 +752,15 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       const ch = stabilized[i];
       if (ch === "\r") {
         if (stabilized[i + 1] === "\n") {
-          out += `\x1b[K\r\n${bg}`;
+          out += bg ? `\x1b[K\r\n${bg}` : "\x1b[K\r\n";
           i += 1;
           continue;
         }
-        out += `\x1b[K\r${bg}`;
+        out += bg ? `\x1b[K\r${bg}` : "\x1b[K\r";
         continue;
       }
       if (ch === "\n") {
-        out += `\x1b[K\n${bg}`;
+        out += bg ? `\x1b[K\n${bg}` : "\x1b[K\n";
         continue;
       }
       out += ch;
@@ -526,11 +769,15 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     if (promptStart != null) {
       // Stop striping before the next prompt so it doesn't bleed.
       commandBlockBgSeqRef.current = "";
+
+      // Mark for finalization after the chunk is actually written (cursor line will be correct then).
+      pendingFinalizeBeforePromptRef.current = true;
+
       return out + "\x1b[0m" + chunkPromptAndAfter;
     }
 
     return out;
-  }, []);
+  }, [detectPromptStartInChunk]);
 
   const computeCommandBlockBgSeq = useCallback(
     (index: number) => {
@@ -556,8 +803,8 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   );
 
   const advanceCommandBlockZebra = useCallback(() => {
-    const zebraEnabled = zebraPluginEnabled;
-    if (!zebraEnabled) {
+    const zebraBgEnabled = getZebraFlags().zebraBgEnabled;
+    if (!zebraBgEnabled) {
       commandBlockBgSeqRef.current = "";
       return;
     }
@@ -565,7 +812,31 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     const cycle = listLen > 0 ? listLen : 2;
     commandBlockZebraIndexRef.current = (commandBlockZebraIndexRef.current + 1) % cycle;
     commandBlockBgSeqRef.current = computeCommandBlockBgSeq(commandBlockZebraIndexRef.current);
-  }, [computeCommandBlockBgSeq, zebraPluginEnabled]);
+  }, [computeCommandBlockBgSeq, getZebraFlags]);
+
+  const handleSessionChunkWritten = useCallback(() => {
+    const term = termRef.current;
+    if (!term) return;
+
+    const zebraFrameEnabled = getZebraFlags().zebraFrameEnabled;
+    if (!zebraFrameEnabled) {
+      pendingFinalizeBeforePromptRef.current = false;
+      return;
+    }
+
+    if (!activeCommandFrameRef.current) {
+      pendingFinalizeBeforePromptRef.current = false;
+      return;
+    }
+
+    if (pendingFinalizeBeforePromptRef.current) {
+      pendingFinalizeBeforePromptRef.current = false;
+      scheduleActiveFrameUpdate({ closeBeforePrompt: true, finalize: true });
+      return;
+    }
+
+    scheduleActiveFrameUpdate();
+  }, [getZebraFlags, scheduleActiveFrameUpdate]);
 
   useEffect(() => {
     const base = createHighlightProcessor(
@@ -600,17 +871,30 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         }
       }
       const processed = base(text);
-      const zebraEnabled = zebraPluginEnabled;
-      if (!zebraEnabled) return processed;
+      const { zebraBgEnabled, zebraFrameEnabled } = getZebraFlags();
+      if (!zebraBgEnabled && !zebraFrameEnabled) return processed;
+
+      // If backgrounds are off but frames are on, we still need prompt detection
+      // so frames can be finalized at the right time.
+      if (!zebraBgEnabled && zebraFrameEnabled) {
+        const promptStart = detectPromptStartInChunk(processed);
+        if (promptStart != null) {
+          pendingFinalizeBeforePromptRef.current = true;
+        }
+        return processed;
+      }
+
+      // Background striping path (also performs prompt detection).
       return applyCommandBlockBgToChunk(processed);
     };
   }, [
     terminalSettings?.keywordHighlightEnabled,
     terminalSettings?.keywordHighlightRules,
     applyCommandBlockBgToChunk,
+    detectPromptStartInChunk,
+    getZebraFlags,
     maybeTriggerAutoSuggest,
     stripAnsi,
-    zebraPluginEnabled,
   ]);
 
 
@@ -630,7 +914,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       const prompt = command.substring(1).trim();
       if (prompt && termRef.current) {
         // Alternate block background per AI call (when enabled)
-        if (zebraPluginEnabled) {
+        if (getZebraFlags().zebraBgEnabled) {
           aiBlockZebraIndexRef.current += 1;
         }
 
@@ -644,6 +928,34 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         });
       }
       return; // Don't call the original handler for LLM commands
+    }
+
+    // UI overlay command frame (does NOT modify terminal output).
+    if (getZebraFlags().zebraFrameEnabled && termRef.current) {
+      const term = termRef.current;
+
+      // Reset prompt detection state at the start of a new block.
+      promptDetectionCarryRef.current = "";
+      pendingFinalizeBeforePromptRef.current = false;
+
+      // If a previous frame is still active, close it before starting a new one.
+      if (activeCommandFrameRef.current) {
+        scheduleActiveFrameUpdate({ closeBeforePrompt: true, finalize: true });
+      }
+
+      // Anchor the frame at the current line (the entered command line).
+      const marker = term.registerMarker(0);
+      const decorationEntry = recreateFrame(term, marker, 1);
+      if (decorationEntry) {
+        activeCommandFrameRef.current = {
+          marker,
+          decoration: decorationEntry.decoration,
+          startLine: marker.line,
+          height: 1,
+          endLine: marker.line,
+          finalized: false,
+        };
+      }
     }
 
     // Track last user command for auto-suggest.
@@ -1000,6 +1312,8 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           timeout: 25_000,
         });
 
+        if (!res.ok) throw new Error(res.error || res.stderr || "SSH exec failed");
+
         const combined = `${res.stdout || ""}\n${res.stderr || ""}`;
         const commands = parsePathCommandsOutput(combined);
         const stderrSnippet = (res.stderr || "").trim().slice(0, 600);
@@ -1079,12 +1393,28 @@ const TerminalComponent: React.FC<TerminalProps> = ({
       } catch (err) {
         logger.warn("Failed to close SSH session", err);
       }
+      return;
     }
     sessionRef.current = null;
   };
 
   const teardown = () => {
     cleanupSession();
+
+    if (frameUpdateRafRef.current != null) {
+      window.cancelAnimationFrame(frameUpdateRafRef.current);
+      frameUpdateRafRef.current = null;
+    }
+    for (const entry of commandFramesRef.current.values()) {
+      try {
+        entry.decoration.dispose();
+      } catch {
+        // ignore
+      }
+    }
+    commandFramesRef.current.clear();
+    activeCommandFrameRef.current = null;
+
     xtermRuntimeRef.current?.dispose();
     xtermRuntimeRef.current = null;
     termRef.current = null;
@@ -1111,6 +1441,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     fitAddonRef,
     serializeAddonRef,
     highlightProcessorRef,
+    onSessionChunkWritten: handleSessionChunkWritten,
     pendingAuthRef,
     updateStatus,
     setStatus,
@@ -1145,6 +1476,7 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           host,
           fontFamilyId,
           fontSize,
+          customFontFamilies,
           terminalTheme: effectiveTheme,
           terminalSettingsRef,
           terminalBackend,
@@ -1179,6 +1511,36 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         searchAddonRef.current = runtime.searchAddon;
 
         const term = runtime.term;
+
+        // Keep command frames aligned on terminal resize.
+        term.onResize(() => {
+          for (const entry of commandFramesRef.current.values()) {
+            // Recreate using current cols, preserve height.
+            recreateFrame(term, entry.marker, entry.height);
+          }
+          const active = activeCommandFrameRef.current;
+          if (active) {
+            const refreshed = commandFramesRef.current.get(active.marker.id);
+            if (refreshed) {
+              activeCommandFrameRef.current = {
+                marker: refreshed.marker,
+                decoration: refreshed.decoration,
+                startLine: active.startLine,
+                height: refreshed.height,
+                endLine: active.endLine,
+                finalized: active.finalized,
+                continuation: active.continuation,
+              };
+            }
+          }
+        });
+
+        // Keep the continuation frame updated when the user scrolls.
+        term.onScroll(() => {
+          if (!getZebraFlags().zebraFrameEnabled) return;
+          if (!activeCommandFrameRef.current) return;
+          scheduleActiveFrameUpdate();
+        });
 
         if (aiPluginEnabled && !llmBannerPrintedRef.current) {
           llmBannerPrintedRef.current = true;
@@ -1376,22 +1738,63 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   }, [fontSize, effectiveTheme, terminalSettings, host.fontSize]);
 
   useEffect(() => {
-    if (termRef.current) {
-      const effectiveFontSize = host.fontSize || fontSize;
-      termRef.current.options.fontSize = effectiveFontSize;
+    const term = termRef.current;
+    if (!term) return;
 
-      const hostFontId = host.fontFamily || fontFamilyId || "menlo";
-      const fontObj = TERMINAL_FONTS.find((f) => f.id === hostFontId) || TERMINAL_FONTS[0];
-      termRef.current.options.fontFamily = fontObj.family;
+    let cancelled = false;
 
-      termRef.current.options.theme = {
-        ...effectiveTheme.colors,
-        selectionBackground: effectiveTheme.colors.selection,
-      };
+    const effectiveFontSize = host.fontSize || fontSize;
+    term.options.fontSize = effectiveFontSize;
 
-      setTimeout(() => safeFit(), 50);
+    const hostFontId = host.fontFamily || fontFamilyId || "menlo";
+    const customFamily = customFontFamilies?.[hostFontId];
+    const fontObj = TERMINAL_FONTS.find((f) => f.id === hostFontId) || TERMINAL_FONTS[0];
+    const resolvedFontFamily = customFamily || fontObj.family;
+    term.options.fontFamily = resolvedFontFamily;
+
+    term.options.theme = {
+      ...effectiveTheme.colors,
+      selectionBackground: effectiveTheme.colors.selection,
+    };
+
+    const remeasureAndFit = () => {
+      if (cancelled) return;
+      try {
+        (term as { renderer?: { remeasureFont?: () => void } })?.renderer?.remeasureFont?.();
+      } catch (err) {
+        logger.warn("Font remeasure failed", err);
+      }
+
+      setTimeout(() => {
+        safeFit();
+        const id = sessionRef.current;
+        if (!id) return;
+        try {
+          resizeSession(id, term.cols, term.rows);
+        } catch (err) {
+          logger.warn("Resize session after font change failed", err);
+        }
+      }, 50);
+    };
+
+    try {
+      const fontFaceSet = document.fonts as FontFaceSet | undefined;
+      if (fontFaceSet?.load) {
+        void fontFaceSet
+          .load(`${effectiveFontSize}px ${resolvedFontFamily}`)
+          .then(() => remeasureAndFit())
+          .catch(() => remeasureAndFit());
+      } else {
+        remeasureAndFit();
+      }
+    } catch {
+      remeasureAndFit();
     }
-  }, [host.fontSize, host.fontFamily, host.theme, fontFamilyId, fontSize, effectiveTheme]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [host.fontSize, host.fontFamily, host.theme, fontFamilyId, fontSize, effectiveTheme, customFontFamilies, resizeSession]);
 
   useEffect(() => {
     if (isVisible && fitAddonRef.current) {
@@ -1842,10 +2245,9 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         >
           <div
             ref={containerRef}
-            className="absolute inset-x-0 bottom-0"
+            className="absolute inset-x-0 bottom-0 px-1"
             style={{
               top: isSearchOpen ? "64px" : "40px",
-              paddingLeft: 6,
               backgroundColor: effectiveTheme.colors.background,
             }}
           />

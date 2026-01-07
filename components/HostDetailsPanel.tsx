@@ -15,10 +15,12 @@ import {
 } from "lucide-react";
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useI18n } from "../application/i18n/I18nProvider";
+import { usePlugins } from "../application/plugins/PluginsProvider";
 import { TERMINAL_THEMES } from "../infrastructure/config/terminalThemes";
 import { MIN_FONT_SIZE, MAX_FONT_SIZE } from "../infrastructure/config/fonts";
 import { cn } from "../lib/utils";
 import { EnvVar, Host, Identity, ProxyConfig, SSHKey } from "../types";
+import { formatPortSequenceText, parsePortSequenceText } from "../domain/portKnocking";
 import { DistroAvatar } from "./DistroAvatar";
 import ThemeSelectPanel from "./ThemeSelectPanel";
 import {
@@ -80,6 +82,7 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
   onCreateTag,
 }) => {
   const { t } = useI18n();
+  const plugins = usePlugins();
   const [form, setForm] = useState<Host>(
     () =>
       initialData ||
@@ -226,6 +229,12 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
     };
     onSave(cleaned);
   };
+
+  const portKnockingAvailable = useMemo(() => plugins.isEnabled("portKnocking"), [plugins]);
+  const portKnockingText = useMemo(
+    () => formatPortSequenceText(form.portKnockingPorts || []),
+    [form.portKnockingPorts],
+  );
 
   const handleCreateGroup = () => {
     if (!newGroupName.trim()) return;
@@ -921,6 +930,24 @@ const HostDetailsPanel: React.FC<HostDetailsPanelProps> = ({
               )}
           </div>
         </Card>
+
+        {portKnockingAvailable && (
+          <Card className="p-3 space-y-3 bg-card border-border/80">
+            <p className="text-xs font-semibold">{t("hostDetails.portKnocking.title")}</p>
+
+            <Input
+              placeholder={t("hostDetails.portKnocking.ports.placeholder")}
+              value={portKnockingText}
+              onChange={(e) => {
+                const ports = parsePortSequenceText(e.target.value);
+                update("portKnockingPorts", ports.length > 0 ? ports : undefined);
+              }}
+              className="h-10"
+            />
+
+            <p className="text-xs text-muted-foreground">{t("hostDetails.portKnocking.ports.hint")}</p>
+          </Card>
+        )}
 
         <Card className="p-3 space-y-3 bg-card border-border/80">
           <p className="text-xs font-semibold">

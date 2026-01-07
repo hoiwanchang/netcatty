@@ -1,7 +1,13 @@
 import { useCallback } from "react";
 import { netcattyBridge } from "../../infrastructure/services/netcattyBridge";
+import { usePlugins } from "../plugins/PluginsProvider";
+import {
+  normalizePortKnockingSettings,
+  type PortKnockingSettings,
+} from "../../domain/portKnocking";
 
 export const useTerminalBackend = () => {
+  const plugins = usePlugins();
   const telnetAvailable = useCallback(() => {
     const bridge = netcattyBridge.get();
     return !!bridge?.startTelnetSession;
@@ -30,8 +36,24 @@ export const useTerminalBackend = () => {
   const startSSHSession = useCallback(async (options: NetcattySSHOptions) => {
     const bridge = netcattyBridge.get();
     if (!bridge?.startSSHSession) throw new Error("startSSHSession unavailable");
+
+    const ports = (options.portKnockingPorts ?? []).filter((p) => Number.isFinite(p));
+
+    if (plugins.isEnabled("portKnocking") && ports.length > 0) {
+      if (!bridge?.portKnock) throw new Error("portKnock unavailable");
+      const raw = plugins.getPluginSettings("portKnocking");
+      const cfg: PortKnockingSettings = normalizePortKnockingSettings(raw);
+      await bridge.portKnock({
+        host: options.hostname,
+        ports,
+        timeoutMs: cfg.timeoutMs,
+        delayMs: cfg.delayMs,
+        waitAfterMs: cfg.waitAfterMs,
+      });
+    }
+
     return bridge.startSSHSession(options);
-  }, []);
+  }, [plugins]);
 
   const startTelnetSession = useCallback(async (options: Parameters<NonNullable<NetcattyBridge["startTelnetSession"]>>[0]) => {
     const bridge = netcattyBridge.get();

@@ -164,6 +164,7 @@ export interface SyncPayload {
     terminalTheme?: string;
     terminalFontFamily?: string;
     terminalFontSize?: number;
+    terminalCustomFonts?: import('./models').TerminalCustomFontAsset[];
     hotkeyScheme?: string;
     customKeyBindings?: Record<string, { mac?: string; pc?: string }>;
 

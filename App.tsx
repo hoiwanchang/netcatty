@@ -157,12 +157,18 @@ function App({ settings }: { settings: SettingsState }) {
     setTerminalFontFamilyId,
     terminalFontSize,
     setTerminalFontSize,
+    terminalCustomFonts,
     terminalSettings,
     updateTerminalSetting,
     hotkeyScheme,
     keyBindings,
     isHotkeyRecording,
   } = settings;
+
+  const customFontFamilies = useMemo(() => {
+    const entries = (terminalCustomFonts ?? []).map((f) => [f.id, f.id] as const);
+    return Object.fromEntries(entries);
+  }, [terminalCustomFonts]);
 
   const {
     hosts,
@@ -825,6 +831,7 @@ function App({ settings }: { settings: SettingsState }) {
           terminalTheme={currentTerminalTheme}
           terminalSettings={terminalSettings}
           terminalFontFamilyId={terminalFontFamilyId}
+          customFontFamilies={customFontFamilies}
           fontSize={terminalFontSize}
           hotkeyScheme={hotkeyScheme}
           keyBindings={keyBindings}

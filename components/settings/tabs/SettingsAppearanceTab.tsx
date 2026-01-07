@@ -1,10 +1,13 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo, useRef } from "react";
 import { Check, Moon, Palette, Sun } from "lucide-react";
 import { useI18n } from "../../../application/i18n/I18nProvider";
 import { DARK_UI_THEMES, LIGHT_UI_THEMES } from "../../../infrastructure/config/uiThemes";
 import { SUPPORTED_UI_LOCALES } from "../../../infrastructure/config/i18n";
+import { TERMINAL_FONTS } from "../../../infrastructure/config/fonts";
 import { cn } from "../../../lib/utils";
-import type { TerminalSettings } from "../../../domain/models";
+import type { TerminalCustomFontAsset, TerminalSettings } from "../../../domain/models";
+import { arrayBufferToBase64 } from "../../../infrastructure/services/EncryptionService";
+import { Button } from "../../ui/button";
 import { SectionHeader, SettingsTabContent, SettingRow, Toggle, Select } from "../settings-ui";
 
 export default function SettingsAppearanceTab(props: {
@@ -26,6 +29,14 @@ export default function SettingsAppearanceTab(props: {
   terminalThemeId: string;
   terminalSettings: TerminalSettings;
   updateTerminalSetting: <K extends keyof TerminalSettings>(key: K, value: TerminalSettings[K]) => void;
+
+  terminalFontFamilyId: string;
+  setTerminalFontFamilyId: (fontId: string) => void;
+  terminalFontSize: number;
+  setTerminalFontSize: (size: number) => void;
+  terminalCustomFonts: TerminalCustomFontAsset[];
+  addTerminalCustomFont: (font: Omit<TerminalCustomFontAsset, 'createdAt'> & { createdAt?: number }) => void;
+  removeTerminalCustomFont: (id: string) => void;
 }) {
   const { t } = useI18n();
   const {
@@ -43,7 +54,36 @@ export default function SettingsAppearanceTab(props: {
     setUiLanguage,
     customCSS,
     setCustomCSS,
+    terminalFontFamilyId,
+    setTerminalFontFamilyId,
+    terminalFontSize,
+    setTerminalFontSize,
+    terminalCustomFonts,
+    addTerminalCustomFont,
+    removeTerminalCustomFont,
   } = props;
+
+  const fontFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const terminalFontOptions = useMemo(() => {
+    const builtIn = TERMINAL_FONTS.map((f) => ({ value: f.id, label: f.name }));
+    const custom = (terminalCustomFonts ?? []).map((f) => ({ value: f.id, label: `${f.name} (${t("settings.appearance.terminalFont.custom")})` }));
+    return [...builtIn, ...custom];
+  }, [terminalCustomFonts, t]);
+
+  const handleImportFontFile = useCallback(async (file: File | null) => {
+    if (!file) return;
+    const buffer = await file.arrayBuffer();
+    const base64 = arrayBufferToBase64(buffer);
+    const id = `custom-${crypto.randomUUID()}`;
+    addTerminalCustomFont({
+      id,
+      name: file.name,
+      mime: file.type || "font/ttf",
+      dataBase64: base64,
+    });
+    setTerminalFontFamilyId(id);
+  }, [addTerminalCustomFont, setTerminalFontFamilyId]);
 
   const getHslStyle = useCallback((hsl: string) => ({ backgroundColor: `hsl(${hsl})` }), []);
 
@@ -221,6 +261,78 @@ export default function SettingsAppearanceTab(props: {
         <SettingRow label={t("settings.appearance.themeColor.dark")}>
           {renderThemeSwatches(DARK_UI_THEMES, darkUiThemeId, setDarkUiThemeId)}
         </SettingRow>
+      </div>
+
+      <SectionHeader title={t("settings.appearance.terminalFont")} />
+      <div className="space-y-0 divide-y divide-border rounded-lg border bg-card px-4">
+        <SettingRow
+          label={t("settings.appearance.terminalFont.family")}
+          description={t("settings.appearance.terminalFont.family.desc")}
+        >
+          <Select
+            value={terminalFontFamilyId}
+            options={terminalFontOptions}
+            onChange={(v) => setTerminalFontFamilyId(v)}
+            className="w-48"
+          />
+        </SettingRow>
+        <SettingRow
+          label={t("settings.appearance.terminalFont.size")}
+          description={t("settings.appearance.terminalFont.size.desc")}
+        >
+          <input
+            type="number"
+            min={6}
+            max={48}
+            value={terminalFontSize}
+            onChange={(e) => {
+              const n = parseInt(e.target.value, 10);
+              if (!Number.isFinite(n)) return;
+              setTerminalFontSize(Math.max(6, Math.min(48, n)));
+            }}
+            className="h-9 w-24 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        </SettingRow>
+        <SettingRow
+          label={t("settings.appearance.terminalFont.customFiles")}
+          description={t("settings.appearance.terminalFont.customFiles.desc")}
+        >
+          <div className="flex items-center gap-2 justify-end">
+            <input
+              ref={fontFileInputRef}
+              type="file"
+              accept=".ttf,.otf,.woff,.woff2"
+              className="hidden"
+              onChange={(e) => void handleImportFontFile(e.target.files?.[0] ?? null)}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => fontFileInputRef.current?.click()}
+            >
+              {t("settings.appearance.terminalFont.import")}
+            </Button>
+          </div>
+        </SettingRow>
+        {terminalCustomFonts.length > 0 && (
+          <div className="py-3 space-y-2">
+            {terminalCustomFonts.map((f) => (
+              <div key={f.id} className="flex items-center justify-between gap-2">
+                <div className="text-xs text-muted-foreground truncate max-w-[240px]" title={f.name}>
+                  {f.name}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={() => removeTerminalCustomFont(f.id)}
+                >
+                  {t("action.remove")}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <SectionHeader title={t("settings.appearance.customCss")} />

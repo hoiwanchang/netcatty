@@ -13,6 +13,7 @@ export const STORAGE_KEY_SYNC = 'netcatty_sync_v1';
 export const STORAGE_KEY_TERM_THEME = 'netcatty_term_theme_v1';
 export const STORAGE_KEY_TERM_FONT_FAMILY = 'netcatty_term_font_family_v1';
 export const STORAGE_KEY_TERM_FONT_SIZE = 'netcatty_term_font_size_v1';
+export const STORAGE_KEY_TERM_CUSTOM_FONTS = 'netcatty_term_custom_fonts_v1';
 export const STORAGE_KEY_TERM_SETTINGS = 'netcatty_term_settings_v1';
 export const STORAGE_KEY_HOTKEY_SCHEME = 'netcatty_hotkey_scheme_v1';
 export const STORAGE_KEY_CUSTOM_KEY_BINDINGS = 'netcatty_custom_key_bindings_v1';

@@ -61,6 +61,9 @@ interface NetcattySSHOptions {
   proxy?: NetcattyProxyConfig;
   // Jump hosts (bastion chain)
   jumpHosts?: NetcattyJumpHost[];
+
+  // Port knocking (per-host). Used by renderer-side preflight logic only.
+  portKnockingPorts?: number[];
 }
 
 interface SftpStatResult {
@@ -171,7 +174,7 @@ interface NetcattyBridge {
     jumpHosts?: NetcattyJumpHost[];
     command: string;
     timeout?: number;
-  }): Promise<{ stdout: string; stderr: string; code: number | null }>;
+  }): Promise<{ ok: boolean; stdout: string; stderr: string; code: number | null; error?: string }>;
   writeToSession(sessionId: string, data: string): void;
   resizeSession(sessionId: string, cols: number, rows: number): void;
   closeSession(sessionId: string): void;
@@ -319,6 +322,9 @@ interface NetcattyBridge {
   pluginsList?: () => Promise<Array<{ id: string; name: string; version: string; description?: string; homepage?: string }>>;
   pluginsInstall?: (manifest: { id: string; name: string; version: string; description?: string; homepage?: string }) => Promise<{ id: string; name: string; version: string; description?: string; homepage?: string }>;
   pluginsDelete?: (id: string) => Promise<{ ok: true }>;
+
+  // Port knocking
+  portKnock?: (options: { host: string; ports: number[]; timeoutMs?: number; delayMs?: number; waitAfterMs?: number }) => Promise<{ ok: true }>;
 
   // App info (name/version/platform) for About screens
   getAppInfo?(): Promise<{ name: string; version: string; platform: string }>;

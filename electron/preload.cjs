@@ -509,6 +509,9 @@ const api = {
   pluginsList: () => ipcRenderer.invoke("netcatty:plugins:list"),
   pluginsInstall: (manifest) => ipcRenderer.invoke("netcatty:plugins:install", manifest),
   pluginsDelete: (id) => ipcRenderer.invoke("netcatty:plugins:delete", { id }),
+
+  // Port knocking
+  portKnock: (options) => ipcRenderer.invoke("netcatty:portknock", options),
 };
 
 // Merge with existing netcatty (if any) to avoid stale objects on hot reload
