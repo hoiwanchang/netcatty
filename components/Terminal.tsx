@@ -308,14 +308,6 @@ const TerminalComponent: React.FC<TerminalProps> = ({
     decoration: IDecoration;
     startLine: number;
     height: number;
-    endLine?: number;
-    finalized?: boolean;
-    continuation?: {
-      marker: IMarker;
-      decoration: IDecoration;
-      startLine: number;
-      height: number;
-    };
   } | null>(null);
   const frameUpdateRafRef = useRef<number | null>(null);
 
@@ -399,111 +391,25 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         if (!term || !active || active.marker.isDisposed) return;
 
         const cursorAbsLine = term.buffer.active.baseY + term.buffer.active.cursorY;
-        const inferredEndLine = opts?.closeBeforePrompt
+        const endLine = opts?.closeBeforePrompt
           ? Math.max(active.startLine, cursorAbsLine - 1)
           : Math.max(active.startLine, cursorAbsLine);
+        const nextHeight = Math.max(1, endLine - active.startLine + 1);
 
-        const targetEndLine = active.finalized
-          ? Math.max(active.startLine, active.endLine ?? active.startLine)
-          : inferredEndLine;
-
-        const nextHeight = Math.max(1, targetEndLine - active.startLine + 1);
-
-        // Update the main (full-block) frame height while the command is live.
-        if (!active.finalized && nextHeight !== active.height) {
+        if (nextHeight !== active.height) {
           const recreated = recreateFrame(term, active.marker, nextHeight);
           if (recreated) {
             activeCommandFrameRef.current = {
-              ...active,
               marker: recreated.marker,
               decoration: recreated.decoration,
+              startLine: active.startLine,
               height: nextHeight,
-              endLine: targetEndLine,
             };
           }
-        } else if (!active.finalized) {
-          active.endLine = targetEndLine;
-        }
-
-        // When the start line scrolls out of view, xterm decorations may stop rendering.
-        // Add a lightweight "continuation" frame anchored to the current viewport top,
-        // so the border remains visible for long outputs.
-        const viewportStart = term.buffer.active.baseY;
-        const viewportEnd = viewportStart + Math.max(0, term.rows - 1);
-        const blockStart = active.startLine;
-        const blockEnd = targetEndLine;
-        const intersectsViewport = blockEnd >= viewportStart && blockStart <= viewportEnd;
-        const needsContinuation = intersectsViewport && blockStart < viewportStart;
-
-        if (needsContinuation) {
-          const desiredStart = viewportStart;
-          const desiredHeight = Math.max(1, Math.min(term.rows, blockEnd - desiredStart + 1));
-          const existing = active.continuation;
-          const needsNewMarker = !existing || existing.marker.isDisposed || existing.startLine !== desiredStart;
-          const needsResize = !existing || existing.height !== desiredHeight;
-
-          if (needsNewMarker) {
-            // Marker at the viewport top (baseY): cursorAbsLine - cursorY === baseY.
-            const yOffsetToViewportTop = -term.buffer.active.cursorY;
-            let marker: IMarker | null = null;
-            try {
-              marker = term.registerMarker(yOffsetToViewportTop);
-            } catch {
-              marker = null;
-            }
-            if (marker) {
-              const created = recreateFrame(term, marker, desiredHeight);
-              if (created) {
-                // Dispose the previous continuation marker/decoration if any.
-                try {
-                  existing?.decoration.dispose();
-                } catch {
-                  // ignore
-                }
-                try {
-                  existing?.marker.dispose?.();
-                } catch {
-                  // ignore
-                }
-                active.continuation = {
-                  marker: created.marker,
-                  decoration: created.decoration,
-                  startLine: desiredStart,
-                  height: desiredHeight,
-                };
-              }
-            }
-          } else if (needsResize && existing) {
-            const recreated = recreateFrame(term, existing.marker, desiredHeight);
-            if (recreated) {
-              active.continuation = {
-                marker: recreated.marker,
-                decoration: recreated.decoration,
-                startLine: desiredStart,
-                height: desiredHeight,
-              };
-            }
-          }
-        } else if (active.continuation) {
-          // No longer needed; clean up.
-          try {
-            active.continuation.decoration.dispose();
-          } catch {
-            // ignore
-          }
-          try {
-            active.continuation.marker.dispose?.();
-          } catch {
-            // ignore
-          }
-          active.continuation = undefined;
         }
 
         if (opts?.finalize) {
-          // Keep the frame as the latest one so it can remain visible during scroll;
-          // but freeze its end line.
-          active.finalized = true;
-          active.endLine = targetEndLine;
+          activeCommandFrameRef.current = null;
         }
       });
     },
@@ -952,8 +858,6 @@ const TerminalComponent: React.FC<TerminalProps> = ({
           decoration: decorationEntry.decoration,
           startLine: marker.line,
           height: 1,
-          endLine: marker.line,
-          finalized: false,
         };
       }
     }
@@ -1527,19 +1431,9 @@ const TerminalComponent: React.FC<TerminalProps> = ({
                 decoration: refreshed.decoration,
                 startLine: active.startLine,
                 height: refreshed.height,
-                endLine: active.endLine,
-                finalized: active.finalized,
-                continuation: active.continuation,
               };
             }
           }
-        });
-
-        // Keep the continuation frame updated when the user scrolls.
-        term.onScroll(() => {
-          if (!getZebraFlags().zebraFrameEnabled) return;
-          if (!activeCommandFrameRef.current) return;
-          scheduleActiveFrameUpdate();
         });
 
         if (aiPluginEnabled && !llmBannerPrintedRef.current) {
@@ -2245,9 +2139,10 @@ const TerminalComponent: React.FC<TerminalProps> = ({
         >
           <div
             ref={containerRef}
-            className="absolute inset-x-0 bottom-0 px-1"
+            className="absolute inset-x-0 bottom-0"
             style={{
               top: isSearchOpen ? "64px" : "40px",
+              paddingLeft: 6,
               backgroundColor: effectiveTheme.colors.background,
             }}
           />
