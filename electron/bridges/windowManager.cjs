@@ -615,6 +615,8 @@ async function createWindow(electronModule, options) {
     if (saveStateTimer) clearTimeout(saveStateTimer);
     const state = getWindowBoundsState(win, lastNormalBounds);
     if (state) saveWindowState(state);
+    // Close settings window when main window closes
+    closeSettingsWindow();
   });
 
   win.on("enter-full-screen", () => {
@@ -731,9 +733,10 @@ async function openSettingsWindow(electronModule, options) {
     backgroundColor,
     icon: appIcon,
     fullscreenable: !isMac,
-    // NOTE: Do NOT set parent on Windows - it can cause the main window to close
-    // when the settings window is closed in some edge cases.
-    parent: isMac ? mainWindow : undefined,
+    // NOTE: Do NOT set parent - on macOS this causes rendering issues when dragging
+    // the window to a different screen (the window becomes invisible while still
+    // appearing in "Show All Windows" in the Dock). On Windows it can cause the
+    // main window to close when the settings window is closed.
     modal: false,
     show: false,
     frame: isMac,
